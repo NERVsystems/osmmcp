@@ -206,6 +206,11 @@ This implementation is based on two excellent sources:
 - [jagan-shanmugam/open-streetmap-mcp](https://github.com/jagan-shanmugam/open-streetmap-mcp) - The original Python implementation
 - [MCPLink OSM MCP Server](https://www.mcplink.ai/mcp/jagan-shanmugam/osm-mcp-server) - The MCPLink version with additional features
 
+## Project History
+
+Originally created by [@pdfinn](https://github.com/pdfinn).  
+All core functionality and initial versions developed prior to organisational transfer.
+
 ## License
 
 MIT License 
