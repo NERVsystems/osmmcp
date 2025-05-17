@@ -1,8 +1,7 @@
-# OpenStreetMap MCP Server (Go Implementation)
+# OpenStreetMap MCP Server
 
 [![Go](https://github.com/NERVsystems/osmmcp/actions/workflows/go.yml/badge.svg)](https://github.com/NERVsystems/osmmcp/actions/workflows/go.yml)
 
-This is a Go implementation of the OpenStreetMap MCP server that enhances LLM capabilities with location-based services and geospatial data.
 
 ## Overview
 
@@ -82,7 +81,7 @@ These tools provide LLMs with foundational geographic capabilities for building 
 
 ## Composable Tool Design
 
-Our MCP tools are designed as strictly composable primitives, enabling novel workflows that might not have been foreseen during development:
+Many of our MCP tools are designed as composable primitives, enabling novel workflows that might not have been foreseen during development.  Composit tools exist to efficiencly perform common complex operations.
 
 ### Composition Principles
 
@@ -127,8 +126,8 @@ The geocoding tools have been enhanced to provide more reliable results and bett
 For optimal results when using the geocoding tools:
 
 1. **Simplify complex queries**: 
-   - Bad: "Blue Temple (Wat Rong Suea Ten) in Chiang Rai"
-   - Good: "Blue Temple Chiang Rai Thailand"
+   - Bad: "Golden Temple (Harmandir Sahib) in Amritsar"
+   - Good: "Golden Temple Amritsar India"
 
 2. **Add geographic context**: 
    - Bad: "Eiffel Tower"
@@ -306,6 +305,12 @@ This implementation is based on two excellent sources:
 
 Originally created by [@pdfinn](https://github.com/pdfinn).  
 All core functionality and initial versions developed prior to organisational transfer.
+
+## Documentation
+
+- [GoDoc](https://pkg.go.dev/github.com/NERVsystems/osmmcp) - Full API documentation
+- [Geocoding Tools Guide](pkg/tools/docs/geocoding.md) - Detailed guide for geocoding features
+- [AI Prompts for Geocoding](pkg/tools/docs/ai_prompts.md) - Examples for AI system integration
 
 ## License
 
