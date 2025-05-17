@@ -80,6 +80,37 @@ The v0.2.0 release includes enhanced geographic and routing capabilities:
 
 These tools provide LLMs with foundational geographic capabilities for building complex location-based applications.
 
+## Composable Tool Design
+
+Our MCP tools are designed as strictly composable primitives, enabling novel workflows that might not have been foreseen during development:
+
+### Composition Principles
+
+- **Uniform Interfaces**: All tools use consistent parameter naming (e.g., `minLat`, `maxLon`) and data structures
+- **Single Responsibility**: Each tool does one thing and does it well
+- **Output/Input Compatibility**: The output of one tool can be directly used as input to another
+- **Functional Independence**: Tools operate without side effects or hidden dependencies
+- **Precise Error Messages**: When issues occur, detailed feedback indicates exactly what went wrong
+
+### Example Workflows
+
+1. **Find Points of Interest Along a Path**:
+   ```
+   bbox_from_points → osm_query_bbox → filter_tags → sort_by_distance
+   ```
+
+2. **Find Optimal Meeting Points**:
+   ```
+   centroid_points → find_nearby_places → filter_tags
+   ```
+
+3. **Analyze Route Characteristics**:
+   ```
+   route_fetch → polyline_decode → route_sample → filter_tags
+   ```
+
+This compositional approach empowers LLMs to create emergent capabilities beyond what any individual tool provides. For example, an LLM can easily create queries like "show the five closest wheelchair-accessible cafés that are open past 22:00 along my route" by combining the appropriate primitive tools, without requiring custom server-side endpoints.
+
 ## Improved Geocoding Tools
 
 The geocoding tools have been enhanced to provide more reliable results and better error handling:
@@ -116,16 +147,17 @@ The code follows software engineering best practices:
 2. **Separation of Concerns** - Tools, server logic, and utilities are cleanly separated
 3. **DRY (Don't Repeat Yourself)** - Common utilities are extracted into the `pkg/osm` package
 4. **Security First** - HTTP clients are properly configured with timeouts and connection limits
-5. **Structured Logging** - All logging is done via `slog` with consistent levels and formats:
+5. **UNIX-like Composability** - Small, focused tools that can be combined in powerful ways
+6. **Structured Logging** - All logging is done via `slog` with consistent levels and formats:
    - Debug: Developer detail, verbose or diagnostic messages
    - Info: Routine operational messages
    - Warn: Unexpected conditions that don't necessarily halt execution
    - Error: Critical problems, potential or actual failures
-6. **SOLID Principles** - Particularly Single Responsibility and Interface Segregation
-7. **Registry Pattern** - All tools are defined in a central registry for improved maintainability
-8. **Google Polyline5 Format** - Standardized polyline encoding/decoding using Google's Polyline5 format
-9. **Precise Geospatial Calculations** - Accurate Haversine distance calculations with appropriate tolerances
-10. **Context-Aware Operations** - All operations properly handle context for cancellation and timeouts
+7. **SOLID Principles** - Particularly Single Responsibility and Interface Segregation
+8. **Registry Pattern** - All tools are defined in a central registry for improved maintainability
+9. **Google Polyline5 Format** - Standardized polyline encoding/decoding using Google's Polyline5 format
+10. **Precise Geospatial Calculations** - Accurate Haversine distance calculations with appropriate tolerances
+11. **Context-Aware Operations** - All operations properly handle context for cancellation and timeouts
 
 ## Usage
 
