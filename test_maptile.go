@@ -22,17 +22,18 @@ func main() {
 				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
 			} `json:"_meta,omitempty"`
 		}{
-			Name: "get_map_tile",
+			Name: "get_map_image",
 			Arguments: map[string]any{
 				"latitude":  37.7749,
 				"longitude": -122.4194,
 				"zoom":      14,
+				"format":    "json", // Add this to force JSON format
 			},
 		},
 	}
 
 	// Call the handler directly
-	result, err := tools.HandleGetMapTile(context.Background(), req)
+	result, err := tools.HandleGetMapImage(context.Background(), req)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
@@ -52,6 +53,8 @@ func main() {
 		fmt.Printf("Error: No content in response\n")
 		os.Exit(1)
 	}
+
+	fmt.Printf("DEBUG: Content received: %s\n", content)
 
 	// Try to parse as error first
 	var errorResponse struct {
