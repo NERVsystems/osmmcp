@@ -33,7 +33,7 @@ var (
 	osrmBurst      int
 
 	// Build information
-	buildVersion = "0.1.0"
+	buildVersion = "0.2.0"
 	buildCommit  = "unknown"
 	buildDate    = "unknown"
 )

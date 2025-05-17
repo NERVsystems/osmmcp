@@ -27,8 +27,8 @@ func ExploreAreaTool() mcp.Tool {
 			mcp.Description("The longitude coordinate of the area's center point"),
 		),
 		mcp.WithNumber("radius",
+			mcp.Required(),
 			mcp.Description("Search radius in meters (max 5000)"),
-			mcp.DefaultNumber(1000),
 		),
 	)
 }
@@ -59,17 +59,20 @@ func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	// Parse input parameters
 	latitude := mcp.ParseFloat64(req, "latitude", 0)
 	longitude := mcp.ParseFloat64(req, "longitude", 0)
-	radius := mcp.ParseFloat64(req, "radius", 1000)
+	radius := mcp.ParseFloat64(req, "radius", 0)
 
-	// Basic validation
+	// Basic validation with descriptive error messages
 	if latitude < -90 || latitude > 90 {
-		return ErrorResponse("Latitude must be between -90 and 90"), nil
+		return ErrorResponse("Invalid latitude: must be between -90 and 90 degrees"), nil
 	}
 	if longitude < -180 || longitude > 180 {
-		return ErrorResponse("Longitude must be between -180 and 180"), nil
+		return ErrorResponse("Invalid longitude: must be between -180 and 180 degrees"), nil
 	}
-	if radius <= 0 || radius > 5000 {
-		return ErrorResponse("Radius must be between 1 and 5000 meters"), nil
+	if radius <= 0 {
+		return ErrorResponse("Radius is required and must be greater than 0 meters"), nil
+	}
+	if radius > 5000 {
+		return ErrorResponse("Radius exceeds maximum allowed value of 5000 meters"), nil
 	}
 
 	// Build Overpass query to get area information

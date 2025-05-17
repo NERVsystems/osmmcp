@@ -32,8 +32,19 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 
 | Tool Name | Description | Example Parameters |
 |-----------|-------------|-------------------|
+| `bbox_from_points` | Create a bounding box that encompasses all given geographic coordinates | `{"points": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}]}` |
+| `centroid_points` | Calculate the geographic centroid (mean center) of a set of coordinates | `{"points": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}]}` |
+| `enrich_emissions` | Enrich route options with CO2 emissions, calorie burn, and cost estimates | `{"options": [{"mode": "car", "distance": 5000}, {"mode": "bike", "distance": 4500}]}` |
+| `filter_tags` | Filter OSM elements by specified tags | `{"elements": [...], "tags": {"amenity": ["restaurant", "cafe"]}}` |
 | `geocode_address` | Convert an address or place name to geographic coordinates | `{"address": "1600 Pennsylvania Ave, Washington DC"}` |
+| `geo_distance` | Calculate the distance between two geographic coordinates | `{"from": {"latitude": 37.7749, "longitude": -122.4194}, "to": {"latitude": 37.8043, "longitude": -122.2711}}` |
+| `osm_query_bbox` | Query OpenStreetMap data within a bounding box with tag filters | `{"bbox": {"minLat": 37.77, "minLon": -122.42, "maxLat": 37.78, "maxLon": -122.41}, "tags": {"amenity": "restaurant"}}` |
+| `polyline_decode` | Decode an encoded polyline string into a series of geographic coordinates | `{"polyline": "a~l~FfynpOnlB_pDhgEhjD"}` |
+| `polyline_encode` | Encode a series of geographic coordinates into a polyline string | `{"points": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}]}` |
 | `reverse_geocode` | Convert geographic coordinates to a human-readable address | `{"latitude": 38.8977, "longitude": -77.0365}` |
+| `route_fetch` | Fetch a route between two points using OSRM routing service | `{"start": {"latitude": 37.7749, "longitude": -122.4194}, "end": {"latitude": 37.8043, "longitude": -122.2711}, "mode": "car"}` |
+| `route_sample` | Sample points along a route at specified intervals | `{"polyline": "a~l~FfynpOnlB_pDhgEhjD", "interval": 100}` |
+| `sort_by_distance` | Sort OSM elements by distance from a reference point | `{"elements": [...], "ref": {"latitude": 37.7749, "longitude": -122.4194}}` |
 | `find_nearby_places` | Find points of interest near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "category": "restaurant", "limit": 5}` |
 | `search_category` | Search for places by category within a rectangular area | `{"category": "cafe", "north_lat": 37.78, "south_lat": 37.77, "east_lon": -122.41, "west_lon": -122.42, "limit": 10}` |
 | `get_route_directions` | Get directions for a route between two locations | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
@@ -45,6 +56,29 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 | `analyze_neighborhood` | Evaluate neighborhood livability for real estate and relocation decisions | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "include_price_data": true}` |
 | `find_schools_nearby` | Find educational institutions near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 2000, "school_type": "elementary", "limit": 5}` |
 | `find_parking_facilities` | Find parking facilities near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "type": "surface", "include_private": false, "limit": 5}` |
+
+## New Geographic and Routing Tools
+
+The v0.2.0 release includes enhanced geographic and routing capabilities:
+
+### Geographic Tools
+
+- **Bounding Box Generation**: Create geographic bounding boxes that encompass multiple points.
+- **Centroid Calculation**: Find the mean center of a set of geographic coordinates.
+- **Distance Calculation**: Calculate precise distances between geographic points using the Haversine formula.
+- **OSM Element Filtering**: Filter and sort OpenStreetMap elements by tags and distance.
+
+### Polyline Tools
+
+- **Polyline Encoding/Decoding**: Convert between geographic coordinates and Google's Polyline5 format.
+- **Route Sampling**: Sample points along routes at specific intervals for detailed analysis.
+
+### Route Tools
+
+- **Route Fetching**: Obtain routes between points using the OSRM routing service.
+- **Emissions Enrichment**: Enhance route options with estimated CO2 emissions, calorie burn, and cost data.
+
+These tools provide LLMs with foundational geographic capabilities for building complex location-based applications.
 
 ## Improved Geocoding Tools
 
