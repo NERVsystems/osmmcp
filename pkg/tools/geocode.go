@@ -591,10 +591,16 @@ func HandleReverseGeocode(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 	initCaches()
 
 	// Parse and validate input coordinates
-	latitude, longitude, err := core.ParseCoordsWithLog(rawInput, logger, "", "")
+	latitude, longitude, err := core.ParseCoordsWithLog(rawInput, logger, "latitude", "longitude")
 	if err != nil {
+		// Extract the specific error code from the validation error
+		errorCode := "INVALID_COORDINATES"
+		if valErr, ok := err.(core.ValidationError); ok {
+			errorCode = valErr.Code
+		}
+
 		return NewGeocodeDetailedError(
-			"INVALID_COORDINATES",
+			errorCode,
 			err.Error(),
 			fmt.Sprintf("lat: %f, lon: %f", latitude, longitude),
 			"Ensure coordinates are in decimal degrees",
