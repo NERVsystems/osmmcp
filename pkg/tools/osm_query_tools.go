@@ -81,7 +81,7 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 			"minLon", input.BBox.MinLon,
 			"maxLat", input.BBox.MaxLat,
 			"maxLon", input.BBox.MaxLon)
-		return ErrorResponse("Invalid bounding box. MinLat must be less than MaxLat, MinLon must be less than MaxLon, and coordinates must be in valid ranges."), nil
+		return ErrorResponse("Invalid bounding box. Ensure parameters use correct case (minLat, minLon, maxLat, maxLon), MinLat must be less than MaxLat, MinLon must be less than MaxLon, and coordinates must be in valid ranges."), nil
 	}
 
 	// Validate tags

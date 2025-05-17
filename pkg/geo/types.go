@@ -35,6 +35,9 @@ type Address struct {
 }
 
 // BoundingBox represents a geographic bounding box with southwest and northeast corners
+// When used in API requests and responses, the field names must be lowercase with camelCase:
+// minLat, minLon, maxLat, maxLon. Using different capitalization (e.g., MinLat) will cause
+// parsing errors in API calls.
 type BoundingBox struct {
 	MinLat float64 `json:"minLat"` // Southern edge (minimum latitude)
 	MinLon float64 `json:"minLon"` // Western edge (minimum longitude)
