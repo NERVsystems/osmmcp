@@ -66,6 +66,13 @@ func (b *OverpassBuilder) WithWayInBbox(minLat, minLon, maxLat, maxLon float64, 
 	return b
 }
 
+// WithRelationInBbox adds a relation query within a bounding box and with specified tags.
+func (b *OverpassBuilder) WithRelationInBbox(minLat, minLon, maxLat, maxLon float64, tags map[string]string) *OverpassBuilder {
+	query := fmt.Sprintf("relation(%f,%f,%f,%f)", minLat, minLon, maxLat, maxLon)
+	b.addElement(query, tags)
+	return b
+}
+
 // WithBbox adds both node and way queries within a bounding box with specified tags.
 func (b *OverpassBuilder) WithBbox(minLat, minLon, maxLat, maxLon float64, tags map[string]string) *OverpassBuilder {
 	return b.WithNodeInBbox(minLat, minLon, maxLat, maxLon, tags).

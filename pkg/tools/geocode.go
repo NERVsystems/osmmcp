@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -204,50 +205,6 @@ func reverseGeoCacheKey(lat, lon float64) string {
 	return fmt.Sprintf("%.5f,%.5f", roundedLat, roundedLon)
 }
 
-// withRetry performs a request with exponential backoff retry logic
-func withRetry(ctx context.Context, req *http.Request, maxAttempts int, initialDelay time.Duration) (*http.Response, error) {
-	logger := slog.Default().With("url", req.URL.String())
-	var lastErr error
-
-	delay := initialDelay
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		// If not the first attempt, log and wait
-		if attempt > 0 {
-			logger.Info("retrying request", "attempt", attempt+1, "max_attempts", maxAttempts, "delay", delay)
-
-			// Wait for backoff delay
-			select {
-			case <-time.After(delay):
-				// Continue with retry
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-
-			// Double the delay for the next retry
-			delay *= 2
-		}
-
-		// Execute the request
-		resp, err := osm.DoRequest(ctx, req)
-		if err == nil && resp.StatusCode == http.StatusOK {
-			return resp, nil
-		}
-
-		// Record the error
-		if err != nil {
-			lastErr = err
-			logger.Error("request failed", "error", err, "attempt", attempt+1)
-		} else {
-			lastErr = fmt.Errorf("HTTP status %d", resp.StatusCode)
-			logger.Error("request returned error status", "status", resp.StatusCode, "attempt", attempt+1)
-			resp.Body.Close()
-		}
-	}
-
-	return nil, fmt.Errorf("max retries reached: %w", lastErr)
-}
-
 // NominatimResult represents a result from the Nominatim geocoding service
 type NominatimResult struct {
 	PlaceID     json.Number `json:"place_id"` // Using json.Number to handle both string and numeric IDs
@@ -294,7 +251,7 @@ func geocodeQuery(ctx context.Context, query string) ([]NominatimResult, error) 
 		// Build request URL
 		reqURL, err := url.Parse(fmt.Sprintf("%s/search", nominatimBaseURL))
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse URL: %w", err)
+			return nil, core.NewError(core.ErrInternalError, "Failed to parse URL for geocoding service")
 		}
 
 		// Add query parameters
@@ -305,23 +262,33 @@ func geocodeQuery(ctx context.Context, query string) ([]NominatimResult, error) 
 		q.Add("addressdetails", "1")                  // Get detailed address info
 		reqURL.RawQuery = q.Encode()
 
-		// Create request
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
+		// Create HTTP request factory for retries
+		requestFactory := func() (*http.Request, error) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set("User-Agent", userAgent)
+			return req, nil
 		}
 
 		// Execute request with retries
-		resp, err := withRetry(ctx, req, maxRetries, initialBackoff)
+		client := osm.GetClient(ctx)
+		resp, err := core.WithRetryFactory(ctx, requestFactory, client, core.DefaultRetryOptions)
 		if err != nil {
-			return nil, err
+			return nil, core.ServiceError("Nominatim", http.StatusServiceUnavailable, "Failed to communicate with geocoding service")
 		}
 		defer resp.Body.Close()
+
+		// Handle error response
+		if resp.StatusCode != http.StatusOK {
+			return nil, core.ServiceError("Nominatim", resp.StatusCode, fmt.Sprintf("Geocoding service error: %d", resp.StatusCode))
+		}
 
 		// Parse response
 		var results []NominatimResult
 		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
+			return nil, core.NewError(core.ErrParseError, "Failed to decode geocoding response")
 		}
 
 		// Cache the results
@@ -458,6 +425,7 @@ func HandleGeocodeAddress(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 	// Try each query in sequence until we get results
 	var allResults []NominatimResult
 	var firstSuccess string
+	var queryErr error
 
 	for _, query := range uniqueQueries {
 		logger.Info("trying query", "query", query)
@@ -465,6 +433,7 @@ func HandleGeocodeAddress(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 		results, err := geocodeQuery(ctx, query)
 		if err != nil {
 			logger.Error("query failed", "query", query, "error", err)
+			queryErr = err
 			continue
 		}
 
@@ -481,6 +450,18 @@ func HandleGeocodeAddress(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 	// Handle no results from any query
 	if len(allResults) == 0 {
 		logger.Info("all queries failed", "address", address)
+
+		// Check if there was a specific error
+		if queryErr != nil {
+			if mcpErr, ok := queryErr.(*core.MCPError); ok {
+				return NewGeocodeDetailedError(
+					mcpErr.Code,
+					mcpErr.Message,
+					address,
+					"Try again in a few moments",
+				), nil
+			}
+		}
 
 		// Generate helpful suggestions
 		suggestions := []string{
@@ -609,28 +590,20 @@ func HandleReverseGeocode(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 	// Initialize caches if needed
 	initCaches()
 
-	// Parse input
-	latitude := mcp.ParseFloat64(rawInput, "latitude", 0)
-	longitude := mcp.ParseFloat64(rawInput, "longitude", 0)
+	// Parse and validate input coordinates
+	latitude, longitude, err := core.ParseCoordsWithLog(rawInput, logger, "latitude", "longitude")
+	if err != nil {
+		// Extract the specific error code from the validation error
+		errorCode := "INVALID_COORDINATES"
+		if valErr, ok := err.(core.ValidationError); ok {
+			errorCode = valErr.Code
+		}
 
-	logger.Info("reverse geocoding coordinates", "latitude", latitude, "longitude", longitude)
-
-	// Basic validation
-	if latitude < -90 || latitude > 90 {
 		return NewGeocodeDetailedError(
-			"INVALID_LATITUDE",
-			"Latitude must be between -90 and 90",
+			errorCode,
+			err.Error(),
 			fmt.Sprintf("lat: %f, lon: %f", latitude, longitude),
-			"Ensure latitude is in decimal degrees",
-		), nil
-	}
-
-	if longitude < -180 || longitude > 180 {
-		return NewGeocodeDetailedError(
-			"INVALID_LONGITUDE",
-			"Longitude must be between -180 and 180",
-			fmt.Sprintf("lat: %f, lon: %f", latitude, longitude),
-			"Ensure longitude is in decimal degrees",
+			"Ensure coordinates are in decimal degrees",
 		), nil
 	}
 
@@ -662,7 +635,7 @@ func HandleReverseGeocode(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 		// Build request URL
 		reqURL, err := url.Parse(fmt.Sprintf("%s/reverse", nominatimBaseURL))
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse URL: %w", err)
+			return nil, core.NewError(core.ErrInternalError, "Failed to parse URL for geocoding service")
 		}
 
 		// Add query parameters
@@ -673,23 +646,33 @@ func HandleReverseGeocode(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 		q.Add("addressdetails", "1")
 		reqURL.RawQuery = q.Encode()
 
-		// Make HTTP request
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
+		// Create HTTP request factory for retries
+		requestFactory := func() (*http.Request, error) {
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
+			if err != nil {
+				return nil, err
+			}
+			req.Header.Set("User-Agent", userAgent)
+			return req, nil
 		}
 
 		// Execute request with retries
-		resp, err := withRetry(ctx, req, maxRetries, initialBackoff)
+		client := osm.GetClient(ctx)
+		resp, err := core.WithRetryFactory(ctx, requestFactory, client, core.DefaultRetryOptions)
 		if err != nil {
-			return nil, err
+			return nil, core.ServiceError("Nominatim", http.StatusServiceUnavailable, "Failed to communicate with geocoding service")
 		}
 		defer resp.Body.Close()
+
+		// Handle error response
+		if resp.StatusCode != http.StatusOK {
+			return nil, core.ServiceError("Nominatim", resp.StatusCode, fmt.Sprintf("Geocoding service error: %d", resp.StatusCode))
+		}
 
 		// Parse response
 		var result NominatimResult
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("failed to decode response: %w", err)
+			return nil, core.NewError(core.ErrParseError, "Failed to decode geocoding response")
 		}
 
 		return result, nil
@@ -697,6 +680,14 @@ func HandleReverseGeocode(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 
 	if err != nil {
 		logger.Error("request failed", "error", err)
+		if mcpErr, ok := err.(*core.MCPError); ok {
+			return NewGeocodeDetailedError(
+				mcpErr.Code,
+				mcpErr.Message,
+				fmt.Sprintf("lat: %f, lon: %f", latitude, longitude),
+				"Try again in a few moments",
+			), nil
+		}
 		return NewGeocodeDetailedError(
 			"SERVICE_ERROR",
 			"Failed to communicate with geocoding service",
