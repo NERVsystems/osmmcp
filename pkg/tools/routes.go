@@ -3,17 +3,16 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
-	"net/url"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/NERVsystems/osmmcp/pkg/cache"
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -67,59 +66,20 @@ type Segment struct {
 func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "get_route_directions")
 
-	// Parse input parameters
-	startLat := mcp.ParseFloat64(req, "start_lat", 0)
-	startLon := mcp.ParseFloat64(req, "start_lon", 0)
-	endLat := mcp.ParseFloat64(req, "end_lat", 0)
-	endLon := mcp.ParseFloat64(req, "end_lon", 0)
+	// Parse and validate start coordinates
+	startLat, startLon, err := core.ParseCoordsWithLog(req, logger, "start_", "")
+	if err != nil {
+		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid start coordinates: %s", err)).ToMCPResult(), nil
+	}
+
+	// Parse and validate end coordinates
+	endLat, endLon, err := core.ParseCoordsWithLog(req, logger, "end_", "")
+	if err != nil {
+		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid end coordinates: %s", err)).ToMCPResult(), nil
+	}
+
+	// Parse transportation mode
 	mode := mcp.ParseString(req, "mode", "car")
-
-	// Create a context with timeout for the request
-	reqCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	// Validate coordinates
-	if startLat < -90 || startLat > 90 {
-		return ErrorWithGuidance(&APIError{
-			Service:     "Validation",
-			StatusCode:  http.StatusBadRequest,
-			Message:     fmt.Sprintf("Invalid start latitude: %f", startLat),
-			Guidance:    "Latitude must be between -90 and 90 degrees",
-			Recoverable: true,
-		}), nil
-	}
-
-	if startLon < -180 || startLon > 180 {
-		return ErrorWithGuidance(&APIError{
-			Service:     "Validation",
-			StatusCode:  http.StatusBadRequest,
-			Message:     fmt.Sprintf("Invalid start longitude: %f", startLon),
-			Guidance:    "Longitude must be between -180 and 180 degrees",
-			Recoverable: true,
-		}), nil
-	}
-
-	if endLat < -90 || endLat > 90 {
-		return ErrorWithGuidance(&APIError{
-			Service:     "Validation",
-			StatusCode:  http.StatusBadRequest,
-			Message:     fmt.Sprintf("Invalid end latitude: %f", endLat),
-			Guidance:    "Latitude must be between -90 and 90 degrees",
-			Recoverable: true,
-		}), nil
-	}
-
-	if endLon < -180 || endLon > 180 {
-		return ErrorWithGuidance(&APIError{
-			Service:     "Validation",
-			StatusCode:  http.StatusBadRequest,
-			Message:     fmt.Sprintf("Invalid end longitude: %f", endLon),
-			Guidance:    "Longitude must be between -180 and 180 degrees",
-			Recoverable: true,
-		}), nil
-	}
-
-	// Map transportation mode to OSRM profile
 	profile := mapModeToProfile(mode)
 
 	// Check cache first
@@ -132,167 +92,93 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 	}
 
-	// Build OSRM request URL
-	baseURL := fmt.Sprintf("%s/route/v1/%s", osm.OSRMBaseURL, profile)
-	coordinates := fmt.Sprintf("%f,%f;%f,%f", startLon, startLat, endLon, endLat)
-
-	reqURL, err := url.Parse(baseURL + "/" + coordinates)
-	if err != nil {
-		logger.Error("failed to parse URL", "error", err)
-		return ErrorWithGuidance(&APIError{
-			Service:     "OSRM",
-			StatusCode:  http.StatusInternalServerError,
-			Message:     "Internal server error",
-			Guidance:    GuidanceOSRMGeneral,
-			Recoverable: true,
-		}), nil
+	// Set up coordinates for the OSRM request
+	coordinates := [][]float64{
+		{startLon, startLat},
+		{endLon, endLat},
 	}
 
-	// Add query parameters
-	q := reqURL.Query()
-	q.Add("overview", "full")       // Include full geometry
-	q.Add("steps", "true")          // Include turn-by-turn instructions
-	q.Add("annotations", "false")   // No additional annotations
-	q.Add("geometries", "polyline") // Use polyline format
-	reqURL.RawQuery = q.Encode()
+	// Set up OSRM options
+	options := core.OSRMOptions{
+		BaseURL:     osm.OSRMBaseURL,
+		Profile:     profile,
+		Overview:    "full",     // Include full geometry
+		Steps:       true,       // Include turn-by-turn instructions
+		Annotations: nil,        // No additional annotations
+		Geometries:  "polyline", // Use polyline format
+		Client:      osm.GetClient(ctx),
+		RetryOptions: core.RetryOptions{
+			MaxAttempts:  3,
+			InitialDelay: 500 * time.Millisecond,
+			MaxDelay:     5 * time.Second,
+			Multiplier:   2.0,
+		},
+	}
 
-	// Wait for rate limiter
-	if err := osm.WaitForService(reqCtx, osm.ServiceOSRM); err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-			logger.Error("rate limiter context canceled", "error", err)
-			return ErrorWithGuidance(&APIError{
-				Service:     "OSRM",
-				StatusCode:  http.StatusRequestTimeout,
-				Message:     "Request timed out waiting for rate limiter",
-				Guidance:    GuidanceOSRMTimeout,
-				Recoverable: true,
-			}), nil
+	// Execute the route request
+	route, err := core.GetRoute(ctx, coordinates, options)
+	if err != nil {
+		logger.Error("failed to get route", "error", err)
+		if mcpErr, ok := err.(*core.MCPError); ok {
+			return mcpErr.ToMCPResult(), nil
 		}
-		logger.Error("rate limiter error", "error", err)
+		return core.ServiceError("OSRM", http.StatusServiceUnavailable,
+			"Failed to communicate with routing service").ToMCPResult(), nil
 	}
 
-	// Make HTTP request
-	httpReq, err := osm.NewRequestWithUserAgent(reqCtx, http.MethodGet, reqURL.String(), nil)
-	if err != nil {
-		logger.Error("failed to create request", "error", err)
-		return ErrorWithGuidance(&APIError{
-			Service:     "OSRM",
-			StatusCode:  http.StatusInternalServerError,
-			Message:     "Failed to create request",
-			Guidance:    GuidanceOSRMGeneral,
-			Recoverable: true,
-		}), nil
+	// Check if we have valid route data
+	if len(route.Routes) == 0 {
+		return core.NewError("ROUTE_NOT_FOUND",
+			"No route found between the specified points").ToMCPResult(), nil
 	}
 
-	// Execute request
-	client := osm.GetClient(reqCtx)
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		logger.Error("failed to execute request", "error", err)
+	// Get the first route (best match)
+	bestRoute := route.Routes[0]
 
-		var apiErr *APIError
-		if errors.Is(err, context.DeadlineExceeded) {
-			apiErr = &APIError{
-				Service:     "OSRM",
-				StatusCode:  http.StatusRequestTimeout,
-				Message:     "Request timed out",
-				Guidance:    GuidanceOSRMTimeout,
-				Recoverable: true,
-			}
-		} else if errors.Is(err, context.Canceled) {
-			apiErr = &APIError{
-				Service:     "OSRM",
-				StatusCode:  499, // Client closed request
-				Message:     "Request canceled",
-				Guidance:    "The request was canceled before completion",
-				Recoverable: false,
-			}
-		} else {
-			apiErr = &APIError{
-				Service:     "OSRM",
-				StatusCode:  http.StatusServiceUnavailable,
-				Message:     "Failed to communicate with routing service",
-				Guidance:    GuidanceNetworkError,
-				Recoverable: true,
-			}
-		}
-
-		return ErrorWithGuidance(apiErr), nil
-	}
-	defer resp.Body.Close()
-
-	// Process response
-	if resp.StatusCode != http.StatusOK {
-		logger.Error("routing service returned error", "status", resp.StatusCode)
-		return ErrorWithGuidance(&APIError{
-			Service:     "OSRM",
-			StatusCode:  resp.StatusCode,
-			Message:     fmt.Sprintf("Routing service error: %d", resp.StatusCode),
-			Guidance:    GuidanceOSRMGeneral,
-			Recoverable: true,
-		}), nil
+	// Extract and decode the polyline
+	polylinePoints := osm.DecodePolyline(bestRoute.Geometry)
+	if len(polylinePoints) == 0 {
+		logger.Error("failed to decode polyline or empty result")
+		return core.NewError("PARSE_ERROR",
+			"Failed to decode route geometry").ToMCPResult(), nil
 	}
 
-	// Parse OSRM response
-	var osrmResp struct {
-		Code   string `json:"code"`
-		Routes []struct {
-			Distance float64 `json:"distance"`
-			Duration float64 `json:"duration"`
-			Geometry string  `json:"geometry"`
-			Legs     []struct {
-				Steps []struct {
-					Distance float64 `json:"distance"`
-					Duration float64 `json:"duration"`
-					Name     string  `json:"name"`
-					Maneuver struct {
-						Location []float64 `json:"location"`
-						Type     string    `json:"type"`
-						Modifier string    `json:"modifier,omitempty"`
-					} `json:"maneuver"`
-				} `json:"steps"`
-			} `json:"legs"`
-		} `json:"routes"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&osrmResp); err != nil {
-		logger.Error("failed to decode response", "error", err)
-		return ErrorWithGuidance(&APIError{
-			Service:     "OSRM",
-			StatusCode:  http.StatusInternalServerError,
-			Message:     "Failed to parse routing response",
-			Guidance:    GuidanceDataError,
-			Recoverable: true,
-		}), nil
-	}
-
-	// Check if any routes were found
-	if len(osrmResp.Routes) == 0 {
-		return ErrorWithGuidance(&APIError{
-			Service:     "OSRM",
-			StatusCode:  http.StatusOK, // OSRM returns 200 even when no route is found
-			Message:     "No route found between the specified points",
-			Guidance:    GuidanceOSRMRouteNotFound,
-			Recoverable: true,
-		}), nil
-	}
-
-	// Get the best route (first one)
-	osrmRoute := osrmResp.Routes[0]
-
-	// Decode the polyline geometry
-	polylinePoints := osm.DecodePolyline(osrmRoute.Geometry)
-
-	// Convert to our coordinate format
-	coords := make([][]float64, len(polylinePoints))
+	// Convert coordinates to the expected format
+	coordinatesArrays := make([][]float64, len(polylinePoints))
 	for i, point := range polylinePoints {
-		coords[i] = []float64{point.Longitude, point.Latitude}
+		coordinatesArrays[i] = []float64{point.Longitude, point.Latitude}
 	}
 
-	// Create RouteDirections object
-	route := RouteDirections{
-		Distance: osrmRoute.Distance,
-		Duration: osrmRoute.Duration,
+	// Build the route segments
+	segments := make([]Segment, 0)
+	if len(bestRoute.Legs) > 0 {
+		for _, step := range bestRoute.Legs[0].Steps {
+			// Generate a human-readable instruction
+			instruction := generateInstruction(
+				step.Maneuver.Type,
+				step.Maneuver.Modifier,
+				step.Name,
+			)
+
+			// Create segment
+			segment := Segment{
+				Distance:    step.Distance,
+				Duration:    step.Duration,
+				Instruction: instruction,
+				Location: Location{
+					Latitude:  step.Maneuver.Location[1],
+					Longitude: step.Maneuver.Location[0],
+				},
+			}
+
+			segments = append(segments, segment)
+		}
+	}
+
+	// Create route directions response
+	directions := RouteDirections{
+		Distance: bestRoute.Distance,
+		Duration: bestRoute.Duration,
 		StartPoint: Location{
 			Latitude:  startLat,
 			Longitude: startLon,
@@ -301,44 +187,29 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 			Latitude:  endLat,
 			Longitude: endLon,
 		},
-		Segments:    []Segment{},
-		Coordinates: coords,
-	}
-
-	// Process route segments
-	if len(osrmRoute.Legs) > 0 {
-		for _, step := range osrmRoute.Legs[0].Steps {
-			segment := Segment{
-				Distance:    step.Distance,
-				Duration:    step.Duration,
-				Instruction: generateInstruction(step.Maneuver.Type, step.Maneuver.Modifier, step.Name),
-				Location: Location{
-					Longitude: step.Maneuver.Location[0],
-					Latitude:  step.Maneuver.Location[1],
-				},
-			}
-			route.Segments = append(route.Segments, segment)
-		}
+		Segments:    segments,
+		Coordinates: coordinatesArrays,
 	}
 
 	// Create output
 	output := struct {
-		Route RouteDirections `json:"route"`
+		Directions RouteDirections `json:"directions"`
 	}{
-		Route: route,
+		Directions: directions,
 	}
 
-	// Return result
+	// Marshal to JSON
 	resultBytes, err := json.Marshal(output)
 	if err != nil {
 		logger.Error("failed to marshal result", "error", err)
-		return ErrorResponse("Failed to generate result"), nil
+		return core.NewError("INTERNAL_ERROR", "Failed to generate result").ToMCPResult(), nil
 	}
 
+	// Create tool result
 	result := mcp.NewToolResultText(string(resultBytes))
 
 	// Cache the result
-	cache.GetGlobalCache().SetWithTTL(cacheKey, result, 15*time.Minute) // Cache for 15 minutes
+	cache.GetGlobalCache().Set(cacheKey, result)
 
 	return result, nil
 }

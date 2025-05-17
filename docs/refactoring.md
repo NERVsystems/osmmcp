@@ -23,133 +23,93 @@
 
 ### 1. Core Package Enhancements (`pkg/core`)
 
-The `pkg/core` package will be expanded to include:
+We've created a new `pkg/core` package with modular components that encapsulate common functionality:
 
-#### 1.1 HTTP Utilities (`http.go`) ✅
-- Generic retry mechanism with exponential backoff
-- Request factory pattern for POST requests
-- Standardized timeout and error handling
+- **HTTP Utilities** (`http.go`):
+  - Generic retry mechanisms with exponential backoff
+  - Unified client configuration and error handling
+  - Request factory pattern to allow retrying requests with bodies
 
-#### 1.2 Validation Utilities (`validation.go`) ✅
-- Coordinate validation (latitude/longitude)
-- Radius validation with min/max bounds
-- Parameter extraction helpers with logging
+- **Validation Utilities** (`validation.go`):
+  - Standardized coordinate validation
+  - Parameter parsing with logging
+  - Radius validation and bounding
 
-#### 1.3 Error Handling (`errors.go`) ✅
-- Standardized error response format
-- Error codes with guidance messages
-- Service-specific error handling (Nominatim, Overpass, OSRM)
+- **Error Handling** (`errors.go`):
+  - Consistent error format with codes, messages, and guidance
+  - Standard error types for common scenarios
+  - Contextual error creation for different API services
 
-#### 1.4 Scoring Utilities (`scoring.go`) ✅
-- Weighted scoring functions for metrics
-- Threshold-based categorization
-- Distance-biased scoring
+- **Scoring Utilities** (`scoring.go`):
+  - Generic weighted scoring functions
+  - Normalization utilities
 
-#### 1.5 Overpass Query Builder (`overpass.go`) ✅
-- Fluent interface for building queries
-- Support for various query patterns (bbox, center+radius)
-- Tag filtering utilities
+- **Overpass Query Builder** (`overpass.go`):
+  - Fluent interface for building Overpass queries
+  - Type-safe parameter handling
+  - Proper escaping and formatting
 
-#### 1.6 OSRM Route Service (`osrm.go`) ✅
-- Unified interface for routing operations
-- Caching support
-- Configuration options
+- **OSRM Route Service** (`osrm.go`):
+  - Unified interface for various routing operations
+  - Response parsing and transformation
+  - Proper caching implementation
 
-### 2. Implementation Plan
+- **Tool Factory** (`tool_factory.go`):
+  - Simplified creation of common tool patterns
+  - Standardized parameter definitions
+  - Consistent tool formatting
 
-#### 2.1 Refactor Common Patterns
-1. Replace direct HTTP calls with core.WithRetry/WithRetryFactory
-2. Replace manual validation with core.ValidateCoords/ValidateRadius
-3. Replace string building with OverpassBuilder
-4. Standardize error responses using core.NewError/ServiceError
+### 2. Refactored Tools
 
-#### 2.2 Create Service Abstractions
-1. Create OSMService for Overpass API interactions
-2. Create GeocodingService for Nominatim interactions
-3. Create RoutingService for OSRM interactions
+We've applied these core utilities to refactor several key tool implementations:
 
-#### 2.3 Implement Tool Factory Pattern
-1. Create a tool factory to reduce boilerplate
-2. Standardize parameter parsing and validation
-3. Implement common error handling patterns
+1. **Routing Tools**:
+   - `HandleRouteFetch` - Now uses the OSRM core utilities
+   - `HandleGetRouteDirections` - Simplified with unified retry logic and error handling
 
-### 3. Example Implementations
+2. **Geocoding Tools**:
+   - `HandleGeocodeAddress` - Improved caching and error handling
+   - `HandleReverseGeocode` - Now uses standardized HTTP retry logic
 
-#### Example 1: Refactored HandleRouteFetch
-```go
-// HandleRouteFetch implements route fetching functionality
-func HandleRouteFetch(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	logger := slog.Default().With("tool", "route_fetch")
+3. **Exploration Tools**:
+   - `HandleExploreArea` - Uses the Overpass builder for cleaner query construction
 
-	// Parse input
-	var input RouteFetchInput
-	inputJSON, err := json.Marshal(req.Params.Arguments)
-	if err != nil {
-		logger.Error("failed to marshal input", "error", err)
-		return core.NewError(core.ErrInvalidInput, "Invalid input format").ToMCPResult(), nil
-	}
+4. **Parking Tools**:
+   - `HandleFindParkingFacilities` - Complete refactoring with new Overpass query builder
 
-	if err := json.Unmarshal(inputJSON, &input); err != nil {
-		logger.Error("failed to parse input", "error", err)
-		return core.NewError(core.ErrInvalidInput, "Invalid input format").ToMCPResult(), nil
-	}
+### 3. Benefits Achieved
 
-	// Validate input coordinates using core validation
-	if err := core.ValidateCoords(input.Start.Latitude, input.Start.Longitude); err != nil {
-		logger.Error("invalid 'start' coordinates", "error", err)
-		return core.NewError(core.ErrInvalidLatitude, fmt.Sprintf("Invalid start coordinates: %s", err)).ToMCPResult(), nil
-	}
+The refactoring has delivered several key benefits:
 
-	if err := core.ValidateCoords(input.End.Latitude, input.End.Longitude); err != nil {
-		logger.Error("invalid 'end' coordinates", "error", err)
-		return core.NewError(core.ErrInvalidLongitude, fmt.Sprintf("Invalid end coordinates: %s", err)).ToMCPResult(), nil
-	}
+1. **Reduced Code Duplication**:
+   - HTTP client logic is now defined once
+   - Validation is centralized and consistent
+   - Query building follows a standard pattern
 
-	// Validate mode
-	profile := convertModeToProfile(input.Mode)
-	if profile == "" {
-		logger.Error("invalid mode", "mode", input.Mode)
-		errResult := core.NewError(core.ErrInvalidParameter, fmt.Sprintf("Invalid mode: %s", input.Mode))
-		errResult = errResult.WithGuidance("Use 'car', 'bike', or 'foot'")
-		return errResult.ToMCPResult(), nil
-	}
+2. **Improved Error Handling**:
+   - Consistent error format across all tools
+   - Better user guidance for error resolution
+   - Proper context propagation
 
-	// Setup the coordinates (longitude first, latitude second, as expected by OSRM)
-	startCoord := []float64{input.Start.Longitude, input.Start.Latitude}
-	endCoord := []float64{input.End.Longitude, input.End.Latitude}
+3. **Enhanced Maintainability**:
+   - Clear separation of concerns
+   - Easier to understand and modify
+   - Single responsibility for each module
 
-	// Use the simpler core.GetSimpleRoute helper
-	route, err := core.GetSimpleRoute(ctx, startCoord, endCoord, profile)
-	if err != nil {
-		logger.Error("failed to get route", "error", err)
-		if mcpErr, ok := err.(*core.MCPError); ok {
-			return mcpErr.ToMCPResult(), nil
-		}
-		// Fallback for other errors
-		return core.ServiceError("OSRM", http.StatusServiceUnavailable, "Failed to get route").
-			WithGuidance("Try again later or check if the locations are reachable").
-			ToMCPResult(), nil
-	}
+4. **Better Performance**:
+   - Proper caching implementation
+   - Optimized retry handling
+   - Reduced memory allocations
 
-	// Create output from route result
-	output := RouteFetchOutput{
-		Polyline: route.Polyline,
-		Distance: route.Distance,
-		Duration: route.Duration,
-	}
+5. **Increased Robustness**:
+   - Better handling of edge cases
+   - More graceful failure modes
+   - Improved logging and diagnostics
 
-	// Return result
-	resultBytes, err := json.Marshal(output)
-	if err != nil {
-		logger.Error("failed to marshal result", "error", err)
-		return core.NewError(core.ErrInternalError, "Failed to generate result").ToMCPResult(), nil
-	}
+## Implementation Examples
 
-	return mcp.NewToolResultText(string(resultBytes)), nil
-}
-```
+### Example 1: Refactored Parking Facilities Search
 
-#### Example 2: Refactored HandleFindParkingFacilities
 ```go
 // HandleFindParkingFacilities implements finding parking facilities functionality
 func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -227,21 +187,89 @@ func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (
 }
 ```
 
-### 4. Migration Strategy
+### Example 2: Refactored Route Directions
 
-1. **Phase 1**: Enhance core utilities (completed)
-2. **Phase 2**: Refactor one tool from each category
-   - Geographic tool (HandleGeoDistance)
-   - Routing tool (HandleRouteFetch) ✅
-   - Search tool (HandleFindParkingFacilities) ✅
-3. **Phase 3**: Gradually migrate all other tools
-4. **Phase 4**: Add comprehensive testing
-5. **Phase 5**: Documentation updates
+```go
+// HandleGetRouteDirections gets directions between two points
+func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	logger := slog.Default().With("tool", "get_route_directions")
 
-## Expected Benefits
+	// Parse and validate start coordinates
+	startLat, startLon, err := core.ParseCoordsWithLog(req, logger, "start_", "")
+	if err != nil {
+		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid start coordinates: %s", err)).ToMCPResult(), nil
+	}
 
-1. **Reduced Code Duplication**: 60-70% reduction in duplicated patterns
-2. **Improved Error Handling**: Consistent, user-friendly error messages
-3. **Better Maintainability**: Separation of concerns, modular design
-4. **Enhanced Performance**: Proper caching, efficient retry handling
-5. **Lower Cognitive Load**: Developers can focus on tool-specific logic 
+	// Parse and validate end coordinates
+	endLat, endLon, err := core.ParseCoordsWithLog(req, logger, "end_", "")
+	if err != nil {
+		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid end coordinates: %s", err)).ToMCPResult(), nil
+	}
+
+	// Parse transportation mode
+	mode := mcp.ParseString(req, "mode", "car")
+	profile := mapModeToProfile(mode)
+
+	// Set up coordinates for the OSRM request
+	coordinates := [][]float64{
+		{startLon, startLat},
+		{endLon, endLat},
+	}
+
+	// Set up OSRM options
+	options := core.OSRMOptions{
+		BaseURL:     osm.OSRMBaseURL,
+		Profile:     profile,
+		Overview:    "full",       // Include full geometry
+		Steps:       true,         // Include turn-by-turn instructions
+		Annotations: nil,          // No additional annotations
+		Geometries:  "polyline",   // Use polyline format
+		Client:      osm.GetClient(ctx),
+		RetryOptions: core.RetryOptions{
+			MaxAttempts:  3,
+			InitialDelay: 500 * time.Millisecond,
+			MaxDelay:     5 * time.Second,
+			Multiplier:   2.0,
+		},
+	}
+
+	// Execute the route request
+	route, err := core.GetRoute(ctx, coordinates, options)
+	if err != nil {
+		logger.Error("failed to get route", "error", err)
+		if mcpErr, ok := err.(*core.MCPError); ok {
+			return mcpErr.ToMCPResult(), nil
+		}
+		return core.ServiceError("OSRM", http.StatusServiceUnavailable, 
+			"Failed to communicate with routing service").ToMCPResult(), nil
+	}
+
+	// Process results and return
+	// ...
+}
+```
+
+## Next Steps
+
+1. **Complete Tool Refactoring**:
+   - Apply similar patterns to remaining tools
+   - Standardize all tool definitions
+
+2. **Testing Improvements**:
+   - Update tests to use mock responses
+   - Add integration tests for core utilities
+   - Increase test coverage
+
+3. **Documentation**:
+   - Document core utilities
+   - Update tool documentation
+   - Add usage examples
+
+4. **Performance Optimization**:
+   - Optimize validation for hot paths
+   - Improve cache hit rates
+   - Consider batch processing for certain operations
+
+5. **Code Generation**:
+   - Investigate generating tool definitions from templates
+   - Automate documentation generation 

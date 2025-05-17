@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -43,27 +44,21 @@ func FindNearbyPlacesTool() mcp.Tool {
 	)
 }
 
-// HandleFindNearbyPlaces implements finding nearby POIs
-func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// HandleFindNearbyPlaces implements finding nearby places functionality
+func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "find_nearby_places")
 
-	// Parse input parameters
-	latitude := mcp.ParseFloat64(rawInput, "latitude", 0)
-	longitude := mcp.ParseFloat64(rawInput, "longitude", 0)
-	radius := mcp.ParseFloat64(rawInput, "radius", 1000)
-	category := mcp.ParseString(rawInput, "category", "")
-	limit := int(mcp.ParseFloat64(rawInput, "limit", 10))
+	// Parse and validate input parameters
+	lat, lon, radius, err := core.ParseCoordsAndRadiusWithLog(req, logger, "", "", "", 1000, 10000)
+	if err != nil {
+		return core.NewError(core.ErrInvalidInput, err.Error()).ToMCPResult(), nil
+	}
 
-	// Basic validation
-	if latitude < -90 || latitude > 90 {
-		return ErrorResponse("Latitude must be between -90 and 90"), nil
-	}
-	if longitude < -180 || longitude > 180 {
-		return ErrorResponse("Longitude must be between -180 and 180"), nil
-	}
-	if radius <= 0 || radius > 10000 {
-		return ErrorResponse("Radius must be between 1 and 10000 meters"), nil
-	}
+	// Parse additional parameters with defaults
+	category := mcp.ParseString(req, "category", "")
+	limit := int(mcp.ParseFloat64(req, "limit", 10))
+
+	// Validate and cap limit
 	if limit <= 0 {
 		limit = 10 // Default limit
 	}
@@ -74,51 +69,58 @@ func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (
 	// Map generic categories to OSM tags
 	osmTags := mapCategoryToOSMTags(category)
 
-	// Build Overpass query
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("[out:json];")
-	queryBuilder.WriteString(fmt.Sprintf("(node(around:%f,%f,%f)", radius, latitude, longitude))
+	// Build Overpass query using the fluent builder
+	queryBuilder := core.NewOverpassBuilder().
+		WithTimeout(25).
+		WithCenter(lat, lon, radius)
 
 	// Add tag filters if category specified
 	if len(osmTags) > 0 {
 		for key, values := range osmTags {
 			for _, value := range values {
-				queryBuilder.WriteString(fmt.Sprintf("[%s=%s]", key, value))
+				queryBuilder.WithTag(key, value)
 			}
 		}
 	}
 
-	// Complete the query
-	queryBuilder.WriteString(";);out body;")
+	// Execute the query using core HTTP utilities
+	overpassQuery := queryBuilder.Build()
 
-	// Build request
+	// Create the request
 	reqURL, err := url.Parse(osm.OverpassBaseURL)
 	if err != nil {
 		logger.Error("failed to parse URL", "error", err)
-		return ErrorResponse("Internal server error"), nil
+		return core.NewError("INTERNAL_ERROR", "Internal server error").ToMCPResult(), nil
 	}
 
-	// Make HTTP request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), strings.NewReader("data="+url.QueryEscape(queryBuilder.String())))
-	if err != nil {
-		logger.Error("failed to create request", "error", err)
-		return ErrorResponse("Failed to create request"), nil
+	// Create a request factory for retry support
+	factory := func() (*http.Request, error) {
+		req, err := http.NewRequest(http.MethodPost, reqURL.String(),
+			strings.NewReader("data="+url.QueryEscape(overpassQuery)))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("User-Agent", osm.UserAgent)
+		return req, nil
 	}
 
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Execute request with retry
+	client := osm.GetClient(ctx)
+	resp, err := core.WithRetryFactory(ctx, factory, client, core.DefaultRetryOptions)
 
-	// Execute request with rate limiting
-	resp, err := osm.DoRequest(ctx, req)
 	if err != nil {
 		logger.Error("failed to execute request", "error", err)
-		return ErrorResponse("Failed to communicate with places service"), nil
+		return core.ServiceError("Overpass", http.StatusServiceUnavailable,
+			"Failed to communicate with places service").ToMCPResult(), nil
 	}
 	defer resp.Body.Close()
 
 	// Process response
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("places service returned error", "status", resp.StatusCode)
-		return ErrorResponse(fmt.Sprintf("Places service error: %d", resp.StatusCode)), nil
+		return core.ServiceError("Overpass", resp.StatusCode,
+			fmt.Sprintf("Places service error: %d", resp.StatusCode)).ToMCPResult(), nil
 	}
 
 	// Parse response
@@ -142,7 +144,7 @@ func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (
 
 	if err := json.NewDecoder(resp.Body).Decode(&overpassResp); err != nil {
 		logger.Error("failed to decode response", "error", err)
-		return ErrorResponse("Failed to parse places response"), nil
+		return core.NewError("PARSE_ERROR", "Failed to parse places response").ToMCPResult(), nil
 	}
 
 	// Convert to Place objects and calculate distances
@@ -155,7 +157,7 @@ func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (
 
 		// Calculate distance
 		distance := osm.HaversineDistance(
-			latitude, longitude,
+			lat, lon,
 			element.Lat, element.Lon,
 		)
 
@@ -190,7 +192,9 @@ func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (
 	}
 
 	// Sort places by distance (closest first)
-	sortPlacesByDistance(places)
+	sort.Slice(places, func(i, j int) bool {
+		return places[i].Distance < places[j].Distance
+	})
 
 	// Limit results
 	if len(places) > limit {
@@ -208,7 +212,7 @@ func HandleFindNearbyPlaces(ctx context.Context, rawInput mcp.CallToolRequest) (
 	resultBytes, err := json.Marshal(output)
 	if err != nil {
 		logger.Error("failed to marshal result", "error", err)
-		return ErrorResponse("Failed to generate result"), nil
+		return core.NewError("INTERNAL_ERROR", "Failed to generate result").ToMCPResult(), nil
 	}
 
 	return mcp.NewToolResultText(string(resultBytes)), nil
