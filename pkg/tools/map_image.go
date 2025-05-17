@@ -58,6 +58,50 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	// Create a direct URL to view this location on OpenStreetMap
 	osmURL := fmt.Sprintf("https://www.openstreetmap.org/#map=%d/%.6f/%.6f", zoom, lat, lon)
 
+	// Fetch the tile data (using the existing core function)
+	tileData, err := core.FetchMapTile(ctx, tileX, tileY, zoom)
+	if err != nil {
+		logger.Error("failed to fetch tile", "error", err)
+		return core.NewError(core.ErrInternalError, "Failed to fetch map tile").ToMCPResult(), nil
+	}
+
+	// Encode tile to base64 with data URL prefix
+	base64Image := "data:image/png;base64," + base64.StdEncoding.EncodeToString(tileData)
+
+	// Detect which response format to use based on request name
+	toolName := req.Params.Name
+
+	if toolName == "get_map_tile" || req.Params.Arguments["format"] == "json" {
+		// Return JSON format for test_maptile.go compatibility
+		response := struct {
+			Tile struct {
+				Base64Image string        `json:"base64_image"`
+				TileInfo    core.TileInfo `json:"tile_info"`
+			} `json:"tile"`
+		}{}
+
+		response.Tile.Base64Image = base64Image
+		response.Tile.TileInfo = tileInfo
+
+		// Convert to JSON
+		jsonResponse, err := json.Marshal(response)
+		if err != nil {
+			logger.Error("failed to marshal response", "error", err)
+			return core.NewError(core.ErrInternalError, "Failed to generate result").ToMCPResult(), nil
+		}
+
+		// Return the JSON response as text content
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				mcp.TextContent{
+					Type: "text",
+					Text: string(jsonResponse),
+				},
+			},
+		}, nil
+	}
+
+	// Original response format
 	// Create a text description of the location
 	description := fmt.Sprintf("Map location: %.6f, %.6f (zoom level: %d)\n", lat, lon, zoom)
 	description += fmt.Sprintf("View this location on OpenStreetMap: %s\n\n", osmURL)
@@ -97,25 +141,12 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		return core.NewError(core.ErrInternalError, "Failed to generate result").ToMCPResult(), nil
 	}
 
-	// Get the tile image URL
-	tileURL := fmt.Sprintf("https://tile.openstreetmap.org/%d/%d/%d.png", zoom, tileX, tileY)
-
-	// Fetch the image data
-	imageData, err := fetchImageFromURL(ctx, tileURL)
-	if err != nil {
-		logger.Error("failed to fetch image", "error", err)
-		return core.NewError(core.ErrInternalError, "Failed to fetch map image").ToMCPResult(), nil
-	}
-
-	// Encode image to base64
-	base64Image := encodeToBase64(imageData)
-
 	// Return both the text description, metadata, and the image as the result
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			mcp.ImageContent{
 				Type:     "image",
-				Data:     base64Image,
+				Data:     encodeToBase64(tileData),
 				MIMEType: "image/png",
 			},
 			mcp.TextContent{
