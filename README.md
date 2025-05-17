@@ -37,6 +37,7 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 | `filter_tags` | Filter OSM elements by specified tags | `{"elements": [...], "tags": {"amenity": ["restaurant", "cafe"]}}` |
 | `geocode_address` | Convert an address or place name to geographic coordinates | `{"address": "1600 Pennsylvania Ave, Washington DC"}` |
 | `geo_distance` | Calculate the distance between two geographic coordinates | `{"from": {"latitude": 37.7749, "longitude": -122.4194}, "to": {"latitude": 37.8043, "longitude": -122.2711}}` |
+| `get_map_image` | Retrieve and display an OpenStreetMap image for analysis | `{"latitude": 37.7749, "longitude": -122.4194, "zoom": 14}` |
 | `osm_query_bbox` | Query OpenStreetMap data within a bounding box with tag filters | `{"bbox": {"minLat": 37.77, "minLon": -122.42, "maxLat": 37.78, "maxLon": -122.41}, "tags": {"amenity": "restaurant"}}` |
 | `polyline_decode` | Decode an encoded polyline string into a series of geographic coordinates | `{"polyline": "a~l~FfynpOnlB_pDhgEhjD"}` |
 | `polyline_encode` | Encode a series of geographic coordinates into a polyline string | `{"points": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}]}` |
@@ -109,6 +110,45 @@ Many of our MCP tools are designed as composable primitives, enabling novel work
    ```
 
 This compositional approach empowers LLMs to create emergent capabilities beyond what any individual tool provides. For example, an LLM can easily create queries like "show the five closest wheelchair-accessible cafés that are open past 22:00 along my route" by combining the appropriate primitive tools, without requiring custom server-side endpoints.
+
+## Visual Mapping Capabilities
+
+The MCP server provides visual mapping capabilities through one tool:
+
+1. `get_map_image` - Returns map images in SVG format for improved visualization and analysis
+
+### Map Images for Analysis
+
+The `get_map_image` tool provides mapping capabilities that deliver both visual map representation and detailed metadata. This approach offers several advantages:
+
+- **Visual Display**: Returns the actual map tile image that displays inline in the conversation
+- **Direct Visualization**: Enables Claude to visually analyze the map features and geography
+- **Comprehensive Metadata**: Includes precise coordinates, bounds, and scale information
+- **Rich Context**: Provides a text description with a direct link to OpenStreetMap for further exploration
+
+The tool returns both the map tile image and a structured text description containing the location coordinates, a direct link to view the map online, and detailed metadata about the map area, making it ideal for both visual analysis and comprehensive location understanding.
+
+### Example Usage
+
+To retrieve a map image of San Francisco at zoom level 14:
+
+```json
+{
+  "name": "get_map_image",
+  "arguments": {
+    "latitude": 37.7749,
+    "longitude": -122.4194,
+    "zoom": 14
+  }
+}
+```
+
+The response from the tool includes:
+- Visual map tile image displayed inline in the conversation
+- Text description of the location with a direct OpenStreetMap link
+- Precise coordinate information for the map
+- Geographic bounds of the visible area
+- Scale information (meters per pixel)
 
 ## Improved Geocoding Tools
 

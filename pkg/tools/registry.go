@@ -225,6 +225,15 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 			Tool:        AnalyzeCommuteTool(),
 			Handler:     HandleAnalyzeCommute,
 		},
+
+		// TileDB Tool
+		// Map Tool
+		{
+			Name:        "get_map_image",
+			Description: "Retrieve and display an OpenStreetMap image for analysis",
+			Tool:        GetMapImageTool(),
+			Handler:     HandleGetMapImage,
+		},
 	}
 }
 
