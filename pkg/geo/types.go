@@ -36,10 +36,10 @@ type Address struct {
 
 // BoundingBox represents a geographic bounding box with southwest and northeast corners
 type BoundingBox struct {
-	MinLat float64 // Southern edge (minimum latitude)
-	MinLon float64 // Western edge (minimum longitude)
-	MaxLat float64 // Northern edge (maximum latitude)
-	MaxLon float64 // Eastern edge (maximum longitude)
+	MinLat float64 `json:"minLat"` // Southern edge (minimum latitude)
+	MinLon float64 `json:"minLon"` // Western edge (minimum longitude)
+	MaxLat float64 `json:"maxLat"` // Northern edge (maximum latitude)
+	MaxLon float64 `json:"maxLon"` // Eastern edge (maximum longitude)
 }
 
 // NewBoundingBox creates a new empty bounding box

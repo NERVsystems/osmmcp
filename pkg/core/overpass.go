@@ -19,10 +19,10 @@ type OverpassBuilder struct {
 
 // BoundingBox represents a geographic bounding box
 type BoundingBox struct {
-	MinLat float64
-	MinLon float64
-	MaxLat float64
-	MaxLon float64
+	MinLat float64 `json:"minLat"`
+	MinLon float64 `json:"minLon"`
+	MaxLat float64 `json:"maxLat"`
+	MaxLon float64 `json:"maxLon"`
 }
 
 // LocationRadius represents a center point with a radius
