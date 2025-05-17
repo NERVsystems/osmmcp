@@ -238,22 +238,18 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 			Instructions: instructions,
 		}
 
-		// Add estimated CO2 emissions (rough estimates)
+		// Add estimated CO2 emissions
 		if mode == "car" {
-			// Average car: ~120g CO2 per km
-			option.CO2Emission = osrmRoute.Distance / 1000 * 0.120
+			option.CO2Emission = osrmRoute.Distance / 1000 * CarCO2PerKm
 		} else if mode == "transit" {
-			// Bus/train: ~50g CO2 per km (rough estimate)
-			option.CO2Emission = osrmRoute.Distance / 1000 * 0.050
+			option.CO2Emission = osrmRoute.Distance / 1000 * TransitCO2PerKm
 		}
 
-		// Add calories burned (rough estimates)
+		// Add calories burned
 		if mode == "walking" {
-			// Walking: ~5 calories per minute for average person
-			option.CaloriesBurned = (osrmRoute.Duration / 60) * 5
+			option.CaloriesBurned = (osrmRoute.Distance / 1000) * WalkingCaloriesPerKm
 		} else if mode == "cycling" {
-			// Cycling: ~8 calories per minute for average person
-			option.CaloriesBurned = (osrmRoute.Duration / 60) * 8
+			option.CaloriesBurned = (osrmRoute.Distance / 1000) * BikeCaloriesPerKm
 		}
 
 		// Generate summary

@@ -5,20 +5,23 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Registry holds all MCP tool registrations for the OpenStreetMap service.
+// Registry contains all tool definitions and handlers
 type Registry struct {
-	logger *slog.Logger
+	logger  *slog.Logger
+	factory *core.ToolFactory
 }
 
-// NewRegistry creates a new MCP tool registry.
+// NewRegistry creates a new tool registry
 func NewRegistry(logger *slog.Logger) *Registry {
 	return &Registry{
-		logger: logger,
+		logger:  logger,
+		factory: core.NewToolFactory(),
 	}
 }
 
@@ -30,9 +33,23 @@ type ToolDefinition struct {
 	Handler     func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)
 }
 
-// GetToolDefinitions returns all OpenStreetMap MCP tool definitions.
+// GetToolDefinitions returns the list of all available tools.
 func (r *Registry) GetToolDefinitions() []ToolDefinition {
 	return []ToolDefinition{
+		// Version and Capabilities Tools (new)
+		{
+			Name:        "get_version",
+			Description: "Get the version and build information of the OSM MCP service",
+			Tool:        GetVersionTool(),
+			Handler:     HandleGetVersion,
+		},
+		{
+			Name:        "get_capabilities",
+			Description: "Get the list of available tools and their descriptions",
+			Tool:        GetCapabilitiesTool(),
+			Handler:     HandleGetCapabilities,
+		},
+
 		// Bbox Tools
 		{
 			Name:        "bbox_from_points",
@@ -227,6 +244,11 @@ func (r *Registry) RegisterPrompts(mcpServer *server.MCPServer) {
 
 // RegisterAll registers all tools and prompts with the MCP server.
 func (r *Registry) RegisterAll(mcpServer *server.MCPServer) {
+	// Create a context with the registry for capabilities lookup
+	registryCtx := context.WithValue(context.Background(), "registry", r)
+	mcpServer.WithContext(registryCtx, nil)
+
+	// Register all tools and prompts
 	r.RegisterTools(mcpServer)
 	r.RegisterPrompts(mcpServer)
 }
