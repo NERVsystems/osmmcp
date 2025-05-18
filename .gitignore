@@ -28,6 +28,15 @@ go.work
 # Generated/test config files
 test-config.json
 
+# Configuration files with potential secrets
+osmmcp-config.json
+temp_config.json
+*.config.json
+
+# Claude Desktop client configuration
+claude-desktop-config.json
+*desktop*.json
+
 # Scratch space
 tmp/
 tmp/**/* 

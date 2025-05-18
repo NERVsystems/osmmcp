@@ -35,206 +35,175 @@ type ToolDefinition struct {
 
 // GetToolDefinitions returns the list of all available tools.
 func (r *Registry) GetToolDefinitions() []ToolDefinition {
-	return []ToolDefinition{
-		// Version and Capabilities Tools (new)
+	defs := []ToolDefinition{
+		// Version and capability tools
 		{
 			Name:        "get_version",
-			Description: "Get the version and build information of the OSM MCP service",
+			Description: "Get the version information for this OpenStreetMap MCP",
 			Tool:        GetVersionTool(),
 			Handler:     HandleGetVersion,
 		},
 		{
 			Name:        "get_capabilities",
-			Description: "Get the list of available tools and their descriptions",
+			Description: "Get the list of available tools and capabilities",
 			Tool:        GetCapabilitiesTool(),
 			Handler:     HandleGetCapabilities,
 		},
 
-		// Bbox Tools
-		{
-			Name:        "bbox_from_points",
-			Description: "Create a bounding box that encompasses all given geographic coordinates",
-			Tool:        BBoxFromPointsTool(),
-			Handler:     HandleBBoxFromPoints,
-		},
-
-		// Centroid Tools
-		{
-			Name:        "centroid_points",
-			Description: "Calculate the geographic centroid (mean center) of a set of coordinates",
-			Tool:        CentroidPointsTool(),
-			Handler:     HandleCentroidPoints,
-		},
-
-		// Emissions Tools
-		{
-			Name:        "enrich_emissions",
-			Description: "Enrich route options with CO2 emissions, calorie burn, and cost estimates",
-			Tool:        EnrichEmissionsTool(),
-			Handler:     HandleEnrichEmissions,
-		},
-
-		// EV Tools
-		{
-			Name:        "find_charging_stations",
-			Description: "Find electric vehicle charging stations near a location",
-			Tool:        FindChargingStationsTool(),
-			Handler:     HandleFindChargingStations,
-		},
-		{
-			Name:        "find_route_charging_stations",
-			Description: "Find electric vehicle charging stations along a route",
-			Tool:        FindRouteChargingStationsTool(),
-			Handler:     HandleFindRouteChargingStations,
-		},
-
-		// Exploration Tools
-		{
-			Name:        "explore_area",
-			Description: "Explore an area and get comprehensive information about it",
-			Tool:        ExploreAreaTool(),
-			Handler:     HandleExploreArea,
-		},
-
-		// Filter Tools
-		{
-			Name:        "filter_tags",
-			Description: "Filter OSM elements by specified tags",
-			Tool:        FilterTagsTool(),
-			Handler:     HandleFilterTags,
-		},
-
-		// Geocoding Tools
+		// Geocoding tools
 		{
 			Name:        "geocode_address",
-			Description: "Convert an address or place name to geographic coordinates",
+			Description: "Convert a text address to geographic coordinates. Parameters: address (string), region (optional string)",
 			Tool:        GeocodeAddressTool(),
 			Handler:     HandleGeocodeAddress,
 		},
 		{
-			Name:        "geo_distance",
-			Description: "Calculate the distance between two geographic coordinates using the Haversine formula",
-			Tool:        GeoDistanceTool(),
-			Handler:     HandleGeoDistance,
-		},
-		{
 			Name:        "reverse_geocode",
-			Description: "Convert geographic coordinates to a human-readable address",
+			Description: "Convert geographic coordinates to a street address. Parameters: latitude (number), longitude (number)",
 			Tool:        ReverseGeocodeTool(),
 			Handler:     HandleReverseGeocode,
 		},
 
-		// Neighborhood Analysis Tools
+		// Visualization tools
 		{
-			Name:        "analyze_neighborhood",
-			Description: "Evaluate neighborhood livability for real estate and relocation decisions",
-			Tool:        AnalyzeNeighborhoodTool(),
-			Handler:     HandleAnalyzeNeighborhood,
+			Name:        "get_map_image",
+			Description: "Get a map image of a specified location. Parameters: latitude (number), longitude (number), zoom (number, 1-19)",
+			Tool:        GetMapImageTool(),
+			Handler:     HandleGetMapImage,
 		},
 
-		// OSM Query Tools
+		// Route and direction tools
 		{
-			Name:        "osm_query_bbox",
-			Description: "Query OpenStreetMap data within a bounding box with tag filters",
-			Tool:        OSMQueryBBoxTool(),
-			Handler:     HandleOSMQueryBBox,
+			Name:        "route_fetch",
+			Description: "Fetch a route between two points. Parameters: start (object with latitude/longitude), end (object with latitude/longitude), mode (string: car, bike, foot)",
+			Tool:        RouteFetchTool(),
+			Handler:     HandleRouteFetch,
+		},
+		{
+			Name:        "get_route_directions",
+			Description: "Get turn-by-turn directions between two points. Parameters: start_lat (number), start_lon (number), end_lat (number), end_lon (number), mode (string: car, bike, foot)",
+			Tool:        GetRouteDirectionsTool(),
+			Handler:     HandleGetRouteDirections,
+		},
+		{
+			Name:        "suggest_meeting_point",
+			Description: "Suggest a meeting point for multiple locations. Parameters: locations (array of latitude/longitude objects), radius (number), category (string)",
+			Tool:        SuggestMeetingPointTool(),
+			Handler:     HandleSuggestMeetingPoint,
+		},
+		{
+			Name:        "route_sample",
+			Description: "Sample points along a route at regular intervals. Parameters: polyline (string), interval (number in meters)",
+			Tool:        RouteSampleTool(),
+			Handler:     HandleRouteSample,
+		},
+		{
+			Name:        "analyze_commute",
+			Description: "Analyze commute options between home and work locations. Parameters: home (object), work (object)",
+			Tool:        AnalyzeCommuteTool(),
+			Handler:     HandleAnalyzeCommute,
 		},
 
-		// Parking Tools
-		{
-			Name:        "find_parking_facilities",
-			Description: "Find parking facilities near a specific location",
-			Tool:        FindParkingAreasTool(),
-			Handler:     HandleFindParkingFacilities,
-		},
-
-		// Place Search Tools
+		// POI and exploration tools
 		{
 			Name:        "find_nearby_places",
-			Description: "Find points of interest near a specific location",
+			Description: "Find places near a location. Parameters: latitude (number), longitude (number), radius (number in meters), category (string), limit (number)",
 			Tool:        FindNearbyPlacesTool(),
 			Handler:     HandleFindNearbyPlaces,
 		},
 		{
-			Name:        "search_category",
-			Description: "Search for places by category within a rectangular area",
-			Tool:        SearchCategoryTool(),
-			Handler:     HandleSearchCategory,
+			Name:        "explore_area",
+			Description: "Explore an area and get key features. Parameters: latitude (number), longitude (number), radius (number in meters)",
+			Tool:        ExploreAreaTool(),
+			Handler:     HandleExploreArea,
+		},
+		{
+			Name:        "find_parking_facilities",
+			Description: "Find parking facilities near a location. Parameters: latitude (number), longitude (number), radius (number in meters), type (string), include_private (boolean), limit (number)",
+			Tool:        FindParkingAreasTool(),
+			Handler:     HandleFindParkingFacilities,
+		},
+		{
+			Name:        "find_charging_stations",
+			Description: "Find EV charging stations near a location. Parameters: latitude (number), longitude (number), radius (number in meters), limit (number)",
+			Tool:        FindChargingStationsTool(),
+			Handler:     HandleFindChargingStations,
+		},
+		{
+			Name:        "find_schools_nearby",
+			Description: "Find schools near a location. Parameters: latitude (number), longitude (number), radius (number in meters), limit (number)",
+			Tool:        FindSchoolsNearbyTool(),
+			Handler:     HandleFindSchoolsNearby,
+		},
+		{
+			Name:        "analyze_neighborhood",
+			Description: "Analyze a neighborhood for livability. Parameters: latitude (number), longitude (number), name (string)",
+			Tool:        AnalyzeNeighborhoodTool(),
+			Handler:     HandleAnalyzeNeighborhood,
 		},
 
-		// Polyline Tools
+		// Geo utility tools
+		{
+			Name:        "geo_distance",
+			Description: "Calculate distance between two points. Parameters: from (object with latitude/longitude), to (object with latitude/longitude)",
+			Tool:        GeoDistanceTool(),
+			Handler:     HandleGeoDistance,
+		},
+		{
+			Name:        "bbox_from_points",
+			Description: "Create a bounding box from multiple points. Parameters: points (array of latitude/longitude objects)",
+			Tool:        BBoxFromPointsTool(),
+			Handler:     HandleBBoxFromPoints,
+		},
+		{
+			Name:        "centroid_points",
+			Description: "Calculate the centroid of multiple points. Parameters: points (array of latitude/longitude objects)",
+			Tool:        CentroidPointsTool(),
+			Handler:     HandleCentroidPoints,
+		},
+
+		// Polyline utilities
 		{
 			Name:        "polyline_decode",
-			Description: "Decode an encoded polyline string into a series of geographic coordinates",
+			Description: "Decode a polyline string into a series of coordinates. Parameters: polyline (string)",
 			Tool:        PolylineDecodeTool(),
 			Handler:     HandlePolylineDecode,
 		},
 		{
 			Name:        "polyline_encode",
-			Description: "Encode a series of geographic coordinates into a polyline string",
+			Description: "Encode a series of coordinates into a polyline string. Parameters: points (array of latitude/longitude objects)",
 			Tool:        PolylineEncodeTool(),
 			Handler:     HandlePolylineEncode,
 		},
-
-		// Routing Tools
 		{
-			Name:        "get_route_directions",
-			Description: "Get directions for a route between two locations",
-			Tool:        GetRouteDirectionsTool(),
-			Handler:     HandleGetRouteDirections,
-		},
-		{
-			Name:        "route_fetch",
-			Description: "Fetch a route between two points using OSRM routing service",
-			Tool:        RouteFetchTool(),
-			Handler:     HandleRouteFetch,
-		},
-		{
-			Name:        "route_sample",
-			Description: "Sample points along a route at specified intervals",
-			Tool:        RouteSampleTool(),
-			Handler:     HandleRouteSample,
-		},
-		{
-			Name:        "suggest_meeting_point",
-			Description: "Suggest an optimal meeting point for multiple people",
-			Tool:        SuggestMeetingPointTool(),
-			Handler:     HandleSuggestMeetingPoint,
+			Name:        "enrich_emissions",
+			Description: "Enrich transportation modes with emissions data. Parameters: options (array of mode objects)",
+			Tool:        EnrichEmissionsTool(),
+			Handler:     HandleEnrichEmissions,
 		},
 
-		// School Tools
+		// OSM query tools
 		{
-			Name:        "find_schools_nearby",
-			Description: "Find educational institutions near a specific location",
-			Tool:        FindSchoolsNearbyTool(),
-			Handler:     HandleFindSchoolsNearby,
+			Name:        "osm_query_bbox",
+			Description: "Query OpenStreetMap data within a bounding box. Parameters: bbox (object with minLat, minLon, maxLat, maxLon), tags (object)",
+			Tool:        OSMQueryBBoxTool(),
+			Handler:     HandleOSMQueryBBox,
 		},
-
-		// Sorting Tools
+		{
+			Name:        "filter_tags",
+			Description: "Filter OSM elements by tags. Parameters: elements (array), tags (object of string arrays)",
+			Tool:        FilterTagsTool(),
+			Handler:     HandleFilterTags,
+		},
 		{
 			Name:        "sort_by_distance",
-			Description: "Sort OSM elements by distance from a reference point",
+			Description: "Sort OSM elements by distance from a reference point. Parameters: elements (array), ref (object with latitude/longitude)",
 			Tool:        SortByDistanceTool(),
 			Handler:     HandleSortByDistance,
 		},
-
-		// Transportation Tools
-		{
-			Name:        "analyze_commute",
-			Description: "Analyze transportation options between home and work locations",
-			Tool:        AnalyzeCommuteTool(),
-			Handler:     HandleAnalyzeCommute,
-		},
-
-		// TileDB Tool
-		// Map Tool
-		{
-			Name:        "get_map_image",
-			Description: "Retrieve and display an OpenStreetMap image for analysis",
-			Tool:        GetMapImageTool(),
-			Handler:     HandleGetMapImage,
-		},
 	}
+
+	return defs
 }
 
 // RegisterTools registers all tools with the MCP server.

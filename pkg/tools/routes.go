@@ -66,20 +66,13 @@ type Segment struct {
 func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "get_route_directions")
 
-	// Parse and validate start coordinates
-	startLat, startLon, err := core.ParseCoordsWithLog(req, logger, "start_", "")
+	// Use the common validator for route parameters
+	startLat, startLon, endLat, endLon, mode, errResult, err := ValidateRouteParameters(req, logger)
 	if err != nil {
-		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid start coordinates: %s", err)).ToMCPResult(), nil
+		return errResult, nil
 	}
 
-	// Parse and validate end coordinates
-	endLat, endLon, err := core.ParseCoordsWithLog(req, logger, "end_", "")
-	if err != nil {
-		return core.NewError(core.ErrInvalidInput, fmt.Sprintf("Invalid end coordinates: %s", err)).ToMCPResult(), nil
-	}
-
-	// Parse transportation mode
-	mode := mcp.ParseString(req, "mode", "car")
+	// Map user-friendly mode to OSRM profile
 	profile := mapModeToProfile(mode)
 
 	// Check cache first

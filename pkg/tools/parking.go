@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
@@ -67,23 +68,111 @@ func FindParkingAreasTool() mcp.Tool {
 func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "find_parking_facilities")
 
-	// Parse and validate input parameters
-	lat, lon, radius, err := core.ParseCoordsAndRadiusWithLog(req, logger, "", "", "", 1000, 5000)
-	if err != nil {
-		return core.NewError(core.ErrInvalidInput, err.Error()).ToMCPResult(), nil
+	// Parse and validate coordinates
+	latStr := mcp.ParseString(req, "latitude", "")
+	lonStr := mcp.ParseString(req, "longitude", "")
+	radiusStr := mcp.ParseString(req, "radius", "")
+	facilityType := mcp.ParseString(req, "type", "")
+	includePrivateStr := mcp.ParseString(req, "include_private", "false")
+	limitStr := mcp.ParseString(req, "limit", "")
+
+	if latStr == "" || lonStr == "" {
+		logger.Error("missing required coordinates", "latitude", latStr, "longitude", lonStr)
+		return NewGeocodeDetailedError(
+			"MISSING_COORDINATES",
+			"Missing required coordinates",
+			"",
+			"The find_parking_facilities tool requires both latitude and longitude parameters",
+			"Example format: {\"latitude\": 40.7128, \"longitude\": -74.0060, \"radius\": 1000}",
+		), nil
 	}
 
-	// Parse additional parameters with defaults
-	facilityType := mcp.ParseString(req, "type", "")
-	includePrivate := mcp.ParseBoolean(req, "include_private", false)
-	limit := int(mcp.ParseFloat64(req, "limit", 10))
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		logger.Error("invalid latitude", "input", latStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LATITUDE",
+			fmt.Sprintf("Invalid latitude value: %s", latStr),
+			"",
+			"Latitude must be a valid number between -90 and 90",
+			"Example: 40.7128 (numeric, no quotes)",
+		), nil
+	}
 
-	// Validate and cap limit
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		logger.Error("invalid longitude", "input", lonStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LONGITUDE",
+			fmt.Sprintf("Invalid longitude value: %s", lonStr),
+			"",
+			"Longitude must be a valid number between -180 and 180",
+			"Example: -74.0060 (numeric, no quotes)",
+		), nil
+	}
+
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		logger.Error("coordinate validation failed", "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_COORDINATES",
+			err.Error(),
+			"",
+			"Latitude must be between -90 and 90, longitude between -180 and 180",
+		), nil
+	}
+
+	var radius float64 = 1000 // Default radius
+	if radiusStr != "" {
+		radius, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil {
+			logger.Error("invalid radius", "input", radiusStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_RADIUS",
+				fmt.Sprintf("Invalid radius value: %s", radiusStr),
+				"",
+				"Radius must be a valid positive number",
+				"Example: 1000 (numeric, no quotes)",
+			), nil
+		}
+	}
+
+	if err := ValidateRadius(radius, 5000); err != nil {
+		logger.Error("radius validation failed", "radius", radius, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_RADIUS",
+			err.Error(),
+			"",
+			"Radius must be positive and less than 5000 meters",
+		), nil
+	}
+
+	// Parse include_private
+	includePrivate := false
+	if includePrivateStr != "" {
+		includePrivate = strings.ToLower(includePrivateStr) == "true"
+	}
+
+	var limit int = 10 // Default limit
+	if limitStr != "" {
+		limitFloat, err := strconv.ParseFloat(limitStr, 64)
+		if err != nil {
+			logger.Error("invalid limit", "input", limitStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_LIMIT",
+				fmt.Sprintf("Invalid limit value: %s", limitStr),
+				"",
+				"Limit must be a valid positive number",
+				"Example: 10 (numeric, no quotes)",
+			), nil
+		}
+		limit = int(limitFloat)
+	}
+
 	if limit <= 0 {
-		limit = 10 // Default limit
+		limit = 10
 	}
 	if limit > 50 {
-		limit = 50 // Max limit
+		limit = 50
 	}
 
 	// Build Overpass query using the fluent builder

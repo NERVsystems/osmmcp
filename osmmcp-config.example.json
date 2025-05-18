@@ -1,0 +1,10 @@
+{
+  "claude": {
+    "api_key": "YOUR_API_KEY_HERE",
+    "model": "claude-3-opus-20240229"
+  },
+  "server": {
+    "host": "localhost",
+    "port": 8080
+  }
+} 

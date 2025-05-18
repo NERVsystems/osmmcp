@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
@@ -57,10 +58,79 @@ type NeighborhoodInfo struct {
 func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "explore_area")
 
-	// Parse and validate input parameters
-	lat, lon, radius, err := core.ParseCoordsAndRadiusWithLog(req, logger, "", "", "", 0, 5000)
+	// Parse and validate coordinates
+	latStr := mcp.ParseString(req, "latitude", "")
+	lonStr := mcp.ParseString(req, "longitude", "")
+	radiusStr := mcp.ParseString(req, "radius", "")
+
+	if latStr == "" || lonStr == "" {
+		logger.Error("missing required coordinates", "latitude", latStr, "longitude", lonStr)
+		return NewGeocodeDetailedError(
+			"MISSING_COORDINATES",
+			"Missing required coordinates",
+			"",
+			"The explore_area tool requires both latitude and longitude parameters",
+			"Example format: {\"latitude\": 40.7128, \"longitude\": -74.0060, \"radius\": 1000}",
+		), nil
+	}
+
+	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		return core.NewError(core.ErrInvalidInput, err.Error()).ToMCPResult(), nil
+		logger.Error("invalid latitude", "input", latStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LATITUDE",
+			fmt.Sprintf("Invalid latitude value: %s", latStr),
+			"",
+			"Latitude must be a valid number between -90 and 90",
+			"Example: 40.7128 (numeric, no quotes)",
+		), nil
+	}
+
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		logger.Error("invalid longitude", "input", lonStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LONGITUDE",
+			fmt.Sprintf("Invalid longitude value: %s", lonStr),
+			"",
+			"Longitude must be a valid number between -180 and 180",
+			"Example: -74.0060 (numeric, no quotes)",
+		), nil
+	}
+
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		logger.Error("coordinate validation failed", "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_COORDINATES",
+			err.Error(),
+			"",
+			"Latitude must be between -90 and 90, longitude between -180 and 180",
+		), nil
+	}
+
+	var radius float64 = 1000 // Default radius
+	if radiusStr != "" {
+		radius, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil {
+			logger.Error("invalid radius", "input", radiusStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_RADIUS",
+				fmt.Sprintf("Invalid radius value: %s", radiusStr),
+				"",
+				"Radius must be a valid positive number",
+				"Example: 1000 (numeric, no quotes)",
+			), nil
+		}
+	}
+
+	if err := ValidateRadius(radius, 5000); err != nil {
+		logger.Error("radius validation failed", "radius", radius, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_RADIUS",
+			err.Error(),
+			"",
+			"Radius must be positive and less than 5000 meters",
+		), nil
 	}
 
 	// Build Overpass query using the fluent builder

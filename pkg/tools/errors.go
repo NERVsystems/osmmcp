@@ -114,3 +114,119 @@ func ValidationError(lat, lon, radius float64, maxRadius float64) *APIError {
 		Guidance:    guidance,
 	}
 }
+
+// GetToolUsageExample returns an example JSON snippet for using a specific tool
+// This is helpful for providing guidance when parameter validation fails
+func GetToolUsageExample(toolName string) string {
+	examples := map[string]string{
+		"geocode_address": `{
+  "address": "Empire State Building, New York"
+}`,
+		"reverse_geocode": `{
+  "latitude": 48.8584,
+  "longitude": 2.2945
+}`,
+		"get_map_image": `{
+  "latitude": 40.7829,
+  "longitude": -73.9654,
+  "zoom": 15
+}`,
+		"route_fetch": `{
+  "start": {"latitude": 40.7128, "longitude": -74.0060},
+  "end": {"latitude": 40.7580, "longitude": -73.9855},
+  "mode": "car"
+}`,
+		"get_route_directions": `{
+  "start_lat": 40.7128,
+  "start_lon": -74.0060,
+  "end_lat": 40.7580,
+  "end_lon": -73.9855,
+  "mode": "car"
+}`,
+		"find_nearby_places": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "radius": 1000,
+  "category": "restaurant",
+  "limit": 10
+}`,
+		"find_parking_facilities": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "radius": 1000,
+  "include_private": false,
+  "limit": 10
+}`,
+		"find_charging_stations": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "radius": 1000,
+  "limit": 10
+}`,
+		"explore_area": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "radius": 1000
+}`,
+		"find_schools_nearby": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "radius": 1000,
+  "limit": 10
+}`,
+		"analyze_neighborhood": `{
+  "latitude": 40.7128,
+  "longitude": -74.0060,
+  "name": "Financial District"
+}`,
+		"geo_distance": `{
+  "from": {"latitude": 40.7128, "longitude": -74.0060},
+  "to": {"latitude": 40.7580, "longitude": -73.9855}
+}`,
+		"bbox_from_points": `{
+  "points": [
+    {"latitude": 40.7128, "longitude": -74.0060},
+    {"latitude": 40.7580, "longitude": -73.9855}
+  ]
+}`,
+		"suggest_meeting_point": `{
+  "locations": [
+    {"latitude": 40.7128, "longitude": -74.0060},
+    {"latitude": 40.7580, "longitude": -73.9855}
+  ],
+  "radius": 1000,
+  "category": "cafe"
+}`,
+		"osm_query_bbox": `{
+  "bbox": {
+    "minLat": 40.7128,
+    "minLon": -74.0060,
+    "maxLat": 40.7580,
+    "maxLon": -73.9855
+  },
+  "tags": {
+    "amenity": "restaurant"
+  }
+}`,
+		"filter_tags": `{
+  "elements": [...],
+  "tags": {
+    "amenity": ["restaurant", "cafe"]
+  }
+}`,
+		"sort_by_distance": `{
+  "elements": [...],
+  "ref": {"latitude": 40.7128, "longitude": -74.0060}
+}`,
+	}
+
+	if example, exists := examples[toolName]; exists {
+		return example
+	}
+
+	// Generic example if not found
+	return `{
+  "latitude": 40.7128,
+  "longitude": -74.0060
+}`
+}

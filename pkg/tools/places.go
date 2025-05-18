@@ -48,22 +48,24 @@ func FindNearbyPlacesTool() mcp.Tool {
 func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "find_nearby_places")
 
-	// Parse and validate input parameters
-	lat, lon, radius, err := core.ParseCoordsAndRadiusWithLog(req, logger, "", "", "", 1000, 10000)
+	// Use the common validator for OSM parameters
+	lat, lon, radius, limit, errResult, err := ValidateOSMParameters(req, "find_nearby_places", logger)
 	if err != nil {
-		return core.NewError(core.ErrInvalidInput, err.Error()).ToMCPResult(), nil
+		return errResult, nil
 	}
 
-	// Parse additional parameters with defaults
+	// Parse additional parameters
 	category := mcp.ParseString(req, "category", "")
-	limit := int(mcp.ParseFloat64(req, "limit", 10))
 
-	// Validate and cap limit
-	if limit <= 0 {
-		limit = 10 // Default limit
-	}
-	if limit > 50 {
-		limit = 50 // Max limit
+	if category == "" {
+		logger.Error("missing category parameter")
+		return NewGeocodeDetailedError(
+			"MISSING_CATEGORY",
+			"Missing required category parameter",
+			"",
+			"The category parameter is required and specifies the type of places to find",
+			"Example categories: restaurant, cafe, park, museum, school, hospital",
+		), nil
 	}
 
 	// Map generic categories to OSM tags
