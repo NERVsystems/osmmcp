@@ -214,67 +214,55 @@ func HandleRouteSample(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 // samplePolylinePoints samples points along a polyline at the specified interval
 // Optimized for better performance by avoiding redundant distance calculations
 func samplePolylinePoints(points []geo.Location, interval float64) []geo.Location {
-	if len(points) < 2 {
+	if len(points) < 2 || interval <= 0 {
 		return points
 	}
 
-	// Algorithm:
-	// 1. Start with the first point
-	// 2. Measure distance to the next segment
-	// 3. If distance < interval, continue to next segment
-	// 4. If distance >= interval, interpolate a point along the segment
-	// 5. Continue from the new point
+	// Start with the first point
+	result := []geo.Location{points[0]}
 
-	result := make([]geo.Location, 0)
-	result = append(result, points[0])
-
-	// Track our position along the route
+	// currentPoint tracks our last sampled position
 	currentPoint := points[0]
-	distanceAccumulated := 0.0
+	// remaining holds the distance left until the next sample
+	remaining := interval
 
 	for i := 0; i < len(points)-1; i++ {
-		p1 := points[i]
-		p2 := points[i+1]
+		start := currentPoint
+		end := points[i+1]
 
-		// Calculate segment length
-		segmentDistance := geo.HaversineDistance(p1.Latitude, p1.Longitude, p2.Latitude, p2.Longitude)
+		for {
+			// Distance from the current point to the end of the segment
+			segmentDistance := geo.HaversineDistance(start.Latitude, start.Longitude, end.Latitude, end.Longitude)
 
-		// Skip zero-length segments
-		if segmentDistance < 0.1 {
-			continue
-		}
+			if segmentDistance < remaining {
+				// Not enough distance left in this segment
+				remaining -= segmentDistance
+				currentPoint = end
+				break
+			}
 
-		// Distance from current point to segment start
-		distFromCurrent := 0.0
-		if i > 0 {
-			distFromCurrent = geo.HaversineDistance(
-				currentPoint.Latitude, currentPoint.Longitude,
-				p1.Latitude, p1.Longitude)
-		}
-
-		// Reset accumulated distance when we reach a new segment
-		distanceAccumulated = distFromCurrent
-
-		// Create sample points along this segment
-		for distanceAccumulated+interval <= segmentDistance {
-			distanceAccumulated += interval
-
-			// Calculate the fraction of the segment we need to traverse
-			fraction := distanceAccumulated / segmentDistance
-
-			// Linearly interpolate between p1 and p2
+			// Interpolate a new point at the required fraction
+			fraction := remaining / segmentDistance
 			newPoint := geo.Location{
-				Latitude:  p1.Latitude + (p2.Latitude-p1.Latitude)*fraction,
-				Longitude: p1.Longitude + (p2.Longitude-p1.Longitude)*fraction,
+				Latitude:  start.Latitude + (end.Latitude-start.Latitude)*fraction,
+				Longitude: start.Longitude + (end.Longitude-start.Longitude)*fraction,
 			}
 
 			result = append(result, newPoint)
+
+			// Prepare for the next sample
+			start = newPoint
 			currentPoint = newPoint
+			remaining = interval
+
+			// Continue sampling within the same segment if distance remains
 		}
 	}
 
-	// Add the final point
-	result = append(result, points[len(points)-1])
+	// Ensure the final point of the polyline is included
+	if last := points[len(points)-1]; result[len(result)-1] != last {
+		result = append(result, last)
+	}
 
 	return result
 }
