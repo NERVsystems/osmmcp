@@ -82,7 +82,7 @@ These tools provide LLMs with foundational geographic capabilities for building 
 
 ## Composable Tool Design
 
-Many of our MCP tools are designed as composable primitives, enabling novel workflows that might not have been foreseen during development.  Composit tools exist to efficiencly perform common complex operations.
+Many of our MCP tools are designed as composable primitives, enabling novel workflows that might not have been foreseen during development.  Composite tools exist to efficiently perform common complex operations.
 
 ### Composition Principles
 
