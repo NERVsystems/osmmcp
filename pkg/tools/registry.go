@@ -43,12 +43,6 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 			Tool:        GetVersionTool(),
 			Handler:     HandleGetVersion,
 		},
-		{
-			Name:        "get_capabilities",
-			Description: "Get the list of available tools and capabilities",
-			Tool:        GetCapabilitiesTool(),
-			Handler:     HandleGetCapabilities,
-		},
 
 		// Geocoding tools
 		{
