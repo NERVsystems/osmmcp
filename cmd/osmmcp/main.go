@@ -15,7 +15,7 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
-	"github.com/NERVsystems/osmmcp/pkg/version"
+	ver "github.com/NERVsystems/osmmcp/pkg/version"
 )
 
 // Version information
@@ -104,7 +104,7 @@ func main() {
 	}
 
 	logger.Info("starting OpenStreetMap MCP server",
-		"version", version.BuildVersion,
+		"version", ver.BuildVersion,
 		"log_level", logLevel.String(),
 		"user_agent", userAgent,
 		"nominatim_rps", nominatimRPS,
@@ -210,5 +210,5 @@ func generateClientConfig(path string, mergeOnly bool) error {
 
 // showVersion displays version information and exits
 func showVersion() {
-	fmt.Println(version.String())
+	fmt.Println(ver.String())
 }
