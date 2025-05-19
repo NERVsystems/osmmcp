@@ -11,8 +11,6 @@ import (
 
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/tools"
-	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
-	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -53,17 +51,6 @@ func NewServer() (*Server, error) {
 	// Create tool registry and register all tools and prompts
 	registry := tools.NewRegistry(logger)
 	registry.RegisterAll(srv)
-
-	// Register prompt templates so the AI knows how to use the tools
-	geocodingTemplate := mcp.NewPromptTemplate("geocoding",
-		[]mcp.PromptMessage{
-			mcp.NewPromptMessage(
-				mcp.RoleSystem,
-				mcp.NewTextContent(prompts.GeocodingSystemPrompt()),
-			),
-		},
-	)
-	srv.AddPromptTemplate(geocodingTemplate)
 
 	return &Server{
 		srv:    srv,
