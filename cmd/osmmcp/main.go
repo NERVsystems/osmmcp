@@ -12,17 +12,19 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
+	"github.com/NERVsystems/osmmcp/pkg/version"
 )
 
 // Version information
 var (
-	version        bool
-	debug          bool
-	generateConfig string
-	userAgent      string
-	mergeOnly      bool
+	showVersionFlag bool
+	debug           bool
+	generateConfig  string
+	userAgent       string
+	mergeOnly       bool
 
 	// Rate limits for each service
 	nominatimRPS   float64
@@ -31,15 +33,10 @@ var (
 	overpassBurst  int
 	osrmRPS        float64
 	osrmBurst      int
-
-	// Build information
-	buildVersion = "0.2.0"
-	buildCommit  = "unknown"
-	buildDate    = "unknown"
 )
 
 func init() {
-	flag.BoolVar(&version, "version", false, "Display version information")
+	flag.BoolVar(&showVersionFlag, "version", false, "Display version information")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.StringVar(&generateConfig, "generate-config", "", "Generate a Claude Desktop Client config file at the specified path")
 	flag.StringVar(&userAgent, "user-agent", osm.UserAgent, "User-Agent string for OSM API requests")
@@ -75,7 +72,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Show version and exit if requested
-	if version {
+	if showVersionFlag {
 		showVersion()
 		return
 	}
@@ -107,7 +104,7 @@ func main() {
 	}
 
 	logger.Info("starting OpenStreetMap MCP server",
-		"version", buildVersion,
+		"version", version.BuildVersion,
 		"log_level", logLevel.String(),
 		"user_agent", userAgent,
 		"nominatim_rps", nominatimRPS,
@@ -141,6 +138,7 @@ func main() {
 	}
 
 	// Server has shut down gracefully
+	cache.GetGlobalCache().Stop()
 	logger.Info("server stopped")
 }
 
@@ -212,5 +210,5 @@ func generateClientConfig(path string, mergeOnly bool) error {
 
 // showVersion displays version information and exits
 func showVersion() {
-	fmt.Printf("osmmcp version %s (%s) built on %s\n", buildVersion, buildCommit, buildDate)
+	fmt.Println(version.String())
 }

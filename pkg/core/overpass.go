@@ -4,6 +4,8 @@ package core
 import (
 	"fmt"
 	"strings"
+
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 )
 
 // OverpassBuilder provides a fluent interface for building Overpass API queries
@@ -11,18 +13,10 @@ type OverpassBuilder struct {
 	outFormat      string
 	timeout        int
 	elements       []string
-	bbox           *BoundingBox
+	bbox           *geo.BoundingBox
 	center         *LocationRadius
 	globalTags     []TagFilter
 	elementFilters []ElementFilter
-}
-
-// BoundingBox represents a geographic bounding box
-type BoundingBox struct {
-	MinLat float64 `json:"minLat"`
-	MinLon float64 `json:"minLon"`
-	MaxLat float64 `json:"maxLat"`
-	MaxLon float64 `json:"maxLon"`
 }
 
 // LocationRadius represents a center point with a radius
@@ -43,8 +37,8 @@ type TagFilter struct {
 type ElementFilter struct {
 	ElementType string // "node", "way", "relation"
 	Tags        []TagFilter
-	BBox        *BoundingBox    // Optional bounding box
-	Around      *LocationRadius // Optional around filter
+	BBox        *geo.BoundingBox // Optional bounding box
+	Around      *LocationRadius  // Optional around filter
 }
 
 // NewOverpassBuilder creates a new builder with default settings
@@ -70,7 +64,7 @@ func (b *OverpassBuilder) WithOutputFormat(format string) *OverpassBuilder {
 
 // WithBoundingBox sets a bounding box filter
 func (b *OverpassBuilder) WithBoundingBox(minLat, minLon, maxLat, maxLon float64) *OverpassBuilder {
-	b.bbox = &BoundingBox{
+	b.bbox = &geo.BoundingBox{
 		MinLat: minLat,
 		MinLon: minLon,
 		MaxLat: maxLat,
