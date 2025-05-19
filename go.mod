@@ -6,7 +6,7 @@ toolchain go1.24.2
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/mark3labs/mcp-go v0.27.1
+	github.com/mark3labs/mcp-go v0.28.0
 	golang.org/x/sync v0.14.0
 	golang.org/x/time v0.11.0
 )
