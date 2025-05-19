@@ -1,6 +1,6 @@
 module github.com/NERVsystems/osmmcp
 
-go 1.24
+go 1.23
 
 require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
