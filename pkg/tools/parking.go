@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -309,7 +310,7 @@ func processParkingFacilities(elements []osm.OverpassElement, lat, lon float64, 
 		}
 
 		// Calculate distance
-		distance := osm.HaversineDistance(
+		distance := geo.HaversineDistance(
 			lat, lon,
 			elemLat, elemLon,
 		)

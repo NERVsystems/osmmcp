@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/geo"
-	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -65,12 +65,12 @@ func HandleGeoDistance(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 		return ErrorResponse("Missing 'to' coordinates"), nil
 	}
 
-	if err := osm.ValidateCoords(input.From.Latitude, input.From.Longitude); err != nil {
+	if err := core.ValidateCoords(input.From.Latitude, input.From.Longitude); err != nil {
 		logger.Error("invalid 'from' coordinates", "error", err)
 		return ErrorResponse(fmt.Sprintf("Invalid 'from' coordinates: %s", err)), nil
 	}
 
-	if err := osm.ValidateCoords(input.To.Latitude, input.To.Longitude); err != nil {
+	if err := core.ValidateCoords(input.To.Latitude, input.To.Longitude); err != nil {
 		logger.Error("invalid 'to' coordinates", "error", err)
 		return ErrorResponse(fmt.Sprintf("Invalid 'to' coordinates: %s", err)), nil
 	}
@@ -149,7 +149,7 @@ func HandleBBoxFromPoints(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 			return ErrorResponse(fmt.Sprintf("Missing coordinates at index %d", i)), nil
 		}
 
-		if err := osm.ValidateCoords(p.Latitude, p.Longitude); err != nil {
+		if err := core.ValidateCoords(p.Latitude, p.Longitude); err != nil {
 			logger.Error("invalid coordinates", "error", err, "index", i)
 			return ErrorResponse(fmt.Sprintf("Invalid coordinates at index %d: %s", i, err)), nil
 		}
@@ -224,7 +224,7 @@ func HandleCentroidPoints(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 			return ErrorResponse(fmt.Sprintf("Missing coordinates at index %d", i)), nil
 		}
 
-		if err := osm.ValidateCoords(p.Latitude, p.Longitude); err != nil {
+		if err := core.ValidateCoords(p.Latitude, p.Longitude); err != nil {
 			logger.Error("invalid coordinates", "error", err, "index", i)
 			return ErrorResponse(fmt.Sprintf("Invalid coordinates at index %d: %s", i, err)), nil
 		}

@@ -18,9 +18,9 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 
 ### Functions
 
-* `NewClient()` - Returns a pre-configured HTTP client for OSM API requests with appropriate timeouts and connection pooling
-* `HaversineDistance()` - Calculates distances between geographic coordinates using the Haversine formula
-* `NewBoundingBox()` - Creates a new bounding box for geographic queries
+* `GetClient()` - Returns a shared HTTP client with connection pooling
+* `geo.HaversineDistance()` - Calculates distances between geographic coordinates using the Haversine formula
+* `geo.NewBoundingBox()` - Creates a new bounding box for geographic queries
 * `BoundingBox.ExtendWithPoint()` - Extends a bounding box to include a point
 * `BoundingBox.Buffer()` - Adds a buffer around a bounding box
 * `BoundingBox.String()` - Returns a formatted string representation of a bounding box for use in Overpass queries
@@ -32,16 +32,20 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 ## Usage
 
 ```go
-import "github.com/NERVsystems/osmmcp/pkg/osm"
+import (
+    "context"
+    "github.com/NERVsystems/osmmcp/pkg/osm"
+    "github.com/NERVsystems/osmmcp/pkg/geo"
+)
 
 // Create an HTTP client
-client := osm.NewClient()
+client := osm.GetClient(context.Background())
 
 // Calculate distance between two points
-distance := osm.HaversineDistance(lat1, lon1, lat2, lon2)
+distance := geo.HaversineDistance(lat1, lon1, lat2, lon2)
 
 // Create and use a bounding box
-bbox := osm.NewBoundingBox()
+bbox := geo.NewBoundingBox()
 bbox.ExtendWithPoint(lat1, lon1)
 bbox.ExtendWithPoint(lat2, lon2)
 bbox.Buffer(1000) // Add 1000 meter buffer

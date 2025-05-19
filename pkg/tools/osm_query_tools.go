@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/osm/queries"
@@ -404,7 +405,7 @@ func HandleSortByDistance(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 		return ErrorResponse("Missing 'ref' coordinates"), nil
 	}
 
-	if err := osm.ValidateCoords(input.Ref.Latitude, input.Ref.Longitude); err != nil {
+	if err := core.ValidateCoords(input.Ref.Latitude, input.Ref.Longitude); err != nil {
 		logger.Error("invalid 'ref' coordinates", "error", err)
 		return ErrorResponse(fmt.Sprintf("Invalid 'ref' coordinates: %s", err)), nil
 	}

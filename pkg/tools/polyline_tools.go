@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/geo"
-	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -134,7 +134,7 @@ func HandlePolylineEncode(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 		}
 
 		// Validate coordinates range
-		if err := osm.ValidateCoords(p.Latitude, p.Longitude); err != nil {
+		if err := core.ValidateCoords(p.Latitude, p.Longitude); err != nil {
 			logger.Error("invalid coordinates", "error", err, "index", i)
 			return ErrorResponse(fmt.Sprintf("Invalid coordinates at index %d: %s", i, err)), nil
 		}

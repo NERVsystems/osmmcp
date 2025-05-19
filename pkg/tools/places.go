@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -158,7 +159,7 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		}
 
 		// Calculate distance
-		distance := osm.HaversineDistance(
+		distance := geo.HaversineDistance(
 			lat, lon,
 			element.Lat, element.Lon,
 		)
