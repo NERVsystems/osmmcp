@@ -12,8 +12,10 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
+	"github.com/NERVsystems/osmmcp/pkg/version"
 )
 
 // Version information
@@ -31,11 +33,6 @@ var (
 	overpassBurst  int
 	osrmRPS        float64
 	osrmBurst      int
-
-	// Build information
-	buildVersion = "0.2.0"
-	buildCommit  = "unknown"
-	buildDate    = "unknown"
 )
 
 func init() {
@@ -107,7 +104,7 @@ func main() {
 	}
 
 	logger.Info("starting OpenStreetMap MCP server",
-		"version", buildVersion,
+		"version", version.BuildVersion,
 		"log_level", logLevel.String(),
 		"user_agent", userAgent,
 		"nominatim_rps", nominatimRPS,
@@ -141,6 +138,7 @@ func main() {
 	}
 
 	// Server has shut down gracefully
+	cache.GetGlobalCache().Stop()
 	logger.Info("server stopped")
 }
 
@@ -212,5 +210,5 @@ func generateClientConfig(path string, mergeOnly bool) error {
 
 // showVersion displays version information and exits
 func showVersion() {
-	fmt.Printf("osmmcp version %s (%s) built on %s\n", buildVersion, buildCommit, buildDate)
+	fmt.Println(version.String())
 }
