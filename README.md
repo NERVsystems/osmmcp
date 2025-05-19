@@ -5,9 +5,9 @@
 
 ## Overview
 
-This is a Go OpenStreetMap MCP server.  It implemets the [Model Context Protocol](https://github.com/mark3labs/mcp-go) to enable LLMs to interact with geospatial data.
+This is a Go OpenStreetMap MCP server.  It implements the [Model Context Protocol](https://github.com/mark3labs/mcp-go) to enable LLMs to interact with geospatial data.
 
-Our focus focus on precision, performance, maintainability, and ease of integration with MCP desktop clients.
+Our focus is on precision, performance, maintainability, and ease of integration with MCP desktop clients.
 
 ## Features
 
@@ -82,7 +82,7 @@ These tools provide LLMs with foundational geographic capabilities for building 
 
 ## Composable Tool Design
 
-Many of our MCP tools are designed as composable primitives, enabling novel workflows that might not have been foreseen during development.  Composit tools exist to efficiencly perform common complex operations.
+Many of our MCP tools are designed as composable primitives, enabling novel workflows that might not have been foreseen during development.  Composite tools exist to efficiently perform common complex operations.
 
 ### Composition Principles
 
@@ -222,6 +222,7 @@ The server supports several command-line flags:
 ```bash
 # Show version information
 ./osmmcp --version
+# The version may differ if built with custom -ldflags
 
 # Enable debug logging
 ./osmmcp --debug
@@ -249,7 +250,7 @@ The server uses structured logging via `slog` with the following configuration:
 
 Example log output:
 ```
-2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.1.0 log_level=info user_agent=osm-mcp-server/0.1.0
+2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.2.0 log_level=info user_agent=osm-mcp-server/0.2.0
 2024-03-14T10:15:30.124Z DEBUG rate limiter initialized service=nominatim rps=1.0 burst=1
 ```
 
