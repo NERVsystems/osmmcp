@@ -15,16 +15,15 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
-	"github.com/NERVsystems/osmmcp/pkg/version"
-)
+	ver "github.com/NERVsystems/osmmcp/pkg/version"
 
 // Version information
 var (
-	version        bool
-	debug          bool
-	generateConfig string
-	userAgent      string
-	mergeOnly      bool
+	showVersionFlag bool
+	debug           bool
+	generateConfig  string
+	userAgent       string
+	mergeOnly       bool
 
 	// Rate limits for each service
 	nominatimRPS   float64
@@ -36,7 +35,7 @@ var (
 )
 
 func init() {
-	flag.BoolVar(&version, "version", false, "Display version information")
+	flag.BoolVar(&showVersionFlag, "version", false, "Display version information")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.StringVar(&generateConfig, "generate-config", "", "Generate a Claude Desktop Client config file at the specified path")
 	flag.StringVar(&userAgent, "user-agent", osm.UserAgent, "User-Agent string for OSM API requests")
@@ -72,7 +71,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Show version and exit if requested
-	if version {
+	if showVersionFlag {
 		showVersion()
 		return
 	}
@@ -104,7 +103,7 @@ func main() {
 	}
 
 	logger.Info("starting OpenStreetMap MCP server",
-		"version", version.BuildVersion,
+		"version", ver.BuildVersion,
 		"log_level", logLevel.String(),
 		"user_agent", userAgent,
 		"nominatim_rps", nominatimRPS,
@@ -211,4 +210,4 @@ func generateClientConfig(path string, mergeOnly bool) error {
 // showVersion displays version information and exits
 func showVersion() {
 	fmt.Println(version.String())
-}
+	fmt.Println(ver.String())
