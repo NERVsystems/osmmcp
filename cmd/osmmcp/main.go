@@ -16,7 +16,6 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
 	ver "github.com/NERVsystems/osmmcp/pkg/version"
-)
 
 // Version information
 var (
@@ -210,5 +209,5 @@ func generateClientConfig(path string, mergeOnly bool) error {
 
 // showVersion displays version information and exits
 func showVersion() {
+	fmt.Println(version.String())
 	fmt.Println(ver.String())
-}
