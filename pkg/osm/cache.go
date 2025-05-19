@@ -28,21 +28,30 @@ func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
 // Get retrieves a value from the cache if it exists and hasn't expired
 func (c *TTLCache[K, V]) Get(key K) (V, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 
 	item, exists := c.items[key]
 	if !exists {
+		c.mu.RUnlock()
 		var zero V
 		return zero, false
 	}
 
 	if time.Now().After(item.expiresAt) {
-		delete(c.items, key)
+		// Upgrade from read to write lock to safely delete expired entry
+		c.mu.RUnlock()
+		c.mu.Lock()
+		// Re-check after obtaining write lock in case it was updated
+		if latest, ok := c.items[key]; ok && time.Now().After(latest.expiresAt) {
+			delete(c.items, key)
+		}
+		c.mu.Unlock()
 		var zero V
 		return zero, false
 	}
 
-	return item.value, true
+	value := item.value
+	c.mu.RUnlock()
+	return value, true
 }
 
 // Set adds a value to the cache with the configured TTL
