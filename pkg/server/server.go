@@ -152,12 +152,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method := r.Method
 
 	// Add request ID to context
-	ctx := r.Context()
 	reqID := r.Header.Get("X-Request-ID")
 	if reqID == "" {
 		reqID = generateRequestID()
 	}
-	ctx = context.WithValue(ctx, "requestID", reqID)
+	// Not using ctx here, so no need to create and update it
+	// Directly use the reqID for logging
 
 	// Log request
 	h.logger.Info("request started",
