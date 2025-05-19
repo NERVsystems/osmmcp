@@ -11,6 +11,8 @@ import (
 
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/tools"
+	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -51,6 +53,24 @@ func NewServer() (*Server, error) {
 	// Create tool registry and register all tools and prompts
 	registry := tools.NewRegistry(logger)
 	registry.RegisterAll(srv)
+
+	// Register the geocoding system prompt using the v0.28.0+ API
+	geocodingPrompt := mcp.NewPrompt("geocoding_system",
+		mcp.WithPromptDescription("System prompt with geocoding instructions"),
+	)
+
+	// Add the prompt with its handler function
+	srv.AddPrompt(geocodingPrompt, func(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		return mcp.NewGetPromptResult(
+			"Geocoding System Instructions",
+			[]mcp.PromptMessage{
+				mcp.NewPromptMessage(
+					mcp.RoleAssistant,
+					mcp.NewTextContent(prompts.GeocodingSystemPrompt()),
+				),
+			},
+		), nil
+	})
 
 	return &Server{
 		srv:    srv,

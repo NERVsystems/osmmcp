@@ -61,9 +61,7 @@ func TestHandleRouteSample(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Meta      *mcp.Meta `json:"_meta,omitempty"`
 				}{
 					Name: "route_sample",
 					Arguments: map[string]any{
@@ -190,9 +188,7 @@ func TestHandleEnrichEmissions(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Meta      *mcp.Meta `json:"_meta,omitempty"`
 				}{
 					Name: "enrich_emissions",
 					Arguments: map[string]any{

@@ -48,9 +48,7 @@ func TestHandlePolylineDecode(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Meta      *mcp.Meta `json:"_meta,omitempty"`
 				}{
 					Name: "polyline_decode",
 					Arguments: map[string]any{
@@ -128,9 +126,7 @@ func TestHandlePolylineEncode(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Meta      *mcp.Meta `json:"_meta,omitempty"`
 				}{
 					Name: "polyline_encode",
 					Arguments: map[string]any{
