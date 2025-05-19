@@ -222,6 +222,7 @@ The server supports several command-line flags:
 ```bash
 # Show version information
 ./osmmcp --version
+# The version may differ if built with custom -ldflags
 
 # Enable debug logging
 ./osmmcp --debug
@@ -249,7 +250,7 @@ The server uses structured logging via `slog` with the following configuration:
 
 Example log output:
 ```
-2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.1.0 log_level=info user_agent=osm-mcp-server/0.1.0
+2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.2.0 log_level=info user_agent=osm-mcp-server/0.2.0
 2024-03-14T10:15:30.124Z DEBUG rate limiter initialized service=nominatim rps=1.0 burst=1
 ```
 
