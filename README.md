@@ -59,7 +59,7 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 
 ## New Geographic and Routing Tools
 
-The v0.2.0 release includes enhanced geographic and routing capabilities:
+The v0.1.1 release includes enhanced geographic and routing capabilities:
 
 ### Geographic Tools
 
@@ -200,6 +200,19 @@ The code follows software engineering best practices:
 
 ## Usage
 
+### Installation
+
+To install the OpenStreetMap MCP server:
+
+#### Option 1: Download Pre-built Binaries
+
+The easiest way to get started is to download the latest release from our [releases page](https://github.com/NERVsystems/osmmcp/releases). Choose the appropriate binary for your operating system and architecture.
+
+#### Option 2: Build from Source
+
+If you prefer to build from source:
+```
+
 ### Requirements
 
 - Go 1.24 or higher
@@ -250,7 +263,7 @@ The server uses structured logging via `slog` with the following configuration:
 
 Example log output:
 ```
-2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.2.0 log_level=info user_agent=osm-mcp-server/0.2.0
+2024-03-14T10:15:30.123Z INFO starting OpenStreetMap MCP server version=0.1.0 log_level=info user_agent=osm-mcp-server/0.1.0
 2024-03-14T10:15:30.124Z DEBUG rate limiter initialized service=nominatim rps=1.0 burst=1
 ```
 
