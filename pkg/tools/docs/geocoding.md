@@ -12,7 +12,9 @@ Converts a textual address or place name into geographic coordinates.
 
 **Usage:**
 ```go
-result, err := tools.HandleGeocodeAddress(ctx, req)
+// Register the tool in your server configuration
+geocodeAddressTool := tools.GeocodeAddressTool()
+server.AddTool(geocodeAddressTool, tools.HandleGeocodeAddress)
 ```
 
 **Input Parameters:**
@@ -34,7 +36,9 @@ Converts geographic coordinates into a human-readable address.
 
 **Usage:**
 ```go
-result, err := tools.HandleReverseGeocode(ctx, req)
+// Register the tool in your server configuration
+reverseGeocodeTool := tools.ReverseGeocodeTool()
+server.AddTool(reverseGeocodeTool, tools.HandleReverseGeocode)
 ```
 
 **Input Parameters:**
@@ -125,5 +129,9 @@ AI assistants should:
 3. Try alternative formulations based on the error code
 4. Provide clear feedback to the user about what went wrong
 5. Suggest alternatives when appropriate
+
+## Integrating with MCP Prompts
+
+See [AI Prompts for Geocoding](ai_prompts.md) for examples of system prompts that can be used to guide AI systems in using these tools effectively.
 
 By following these guidelines, AI assistants can significantly improve the success rate of geocoding operations and provide better location-based assistance. 
