@@ -200,6 +200,22 @@ The code follows software engineering best practices:
 
 ## Usage
 
+### Installation
+
+To install the OpenStreetMap MCP server:
+
+```bash
+# Clone the repository
+git clone https://github.com/NERVsystems/osmmcp.git
+cd osmmcp
+
+# Update dependencies
+go mod tidy
+
+# Build the server
+go build -o osmmcp ./cmd/osmmcp
+```
+
 ### Requirements
 
 - Go 1.24 or higher
