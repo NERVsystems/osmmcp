@@ -25,9 +25,6 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 * `BoundingBox.Buffer()` - Adds a buffer around a bounding box
 * `BoundingBox.String()` - Returns a formatted string representation of a bounding box for use in Overpass queries
 
-### Data
-
-* `CategoryMap` - Maps common category names (restaurant, park, etc.) to OSM tags
 
 ## Usage
 
@@ -45,9 +42,6 @@ bbox := osm.NewBoundingBox()
 bbox.ExtendWithPoint(lat1, lon1)
 bbox.ExtendWithPoint(lat2, lon2)
 bbox.Buffer(1000) // Add 1000 meter buffer
-
-// Get category-specific OSM tags
-restaurantTags := osm.CategoryMap["restaurant"]
 ```
 
 ## Design Principles
