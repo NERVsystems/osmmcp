@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -227,7 +228,7 @@ func HandleFindChargingStations(ctx context.Context, req mcp.CallToolRequest) (*
 		}
 
 		// Calculate distance
-		distance := osm.HaversineDistance(
+		distance := geo.HaversineDistance(
 			lat, lon,
 			element.Lat, element.Lon,
 		)
@@ -440,7 +441,7 @@ func HandleFindRouteChargingStations(ctx context.Context, req mcp.CallToolReques
 	}
 
 	// Create a bounding box for the route
-	bbox := osm.NewBoundingBox()
+	bbox := geo.NewBoundingBox()
 	for _, coord := range routeCoords {
 		bbox.ExtendWithPoint(coord.Latitude, coord.Longitude)
 	}
@@ -522,7 +523,7 @@ func HandleFindRouteChargingStations(ctx context.Context, req mcp.CallToolReques
 
 		// Simple but not super efficient algorithm to find closest point on route
 		for i := 0; i < len(routeCoords); i++ {
-			dist := osm.HaversineDistance(stationLoc.Latitude, stationLoc.Longitude,
+			dist := geo.HaversineDistance(stationLoc.Latitude, stationLoc.Longitude,
 				routeCoords[i].Latitude, routeCoords[i].Longitude)
 
 			if dist < minDistToRoute {
@@ -531,7 +532,7 @@ func HandleFindRouteChargingStations(ctx context.Context, req mcp.CallToolReques
 				// Calculate approximate distance from start to this point on route
 				if i > 0 {
 					for j := 0; j < i; j++ {
-						distFromStart += osm.HaversineDistance(
+						distFromStart += geo.HaversineDistance(
 							routeCoords[j].Latitude, routeCoords[j].Longitude,
 							routeCoords[j+1].Latitude, routeCoords[j+1].Longitude)
 					}

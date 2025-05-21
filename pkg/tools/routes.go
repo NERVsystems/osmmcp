@@ -13,6 +13,7 @@ import (
 
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -265,7 +266,7 @@ func HandleSuggestMeetingPoint(ctx context.Context, req mcp.CallToolRequest) (*m
 	// Calculate appropriate search radius based on distance between furthest points
 	var maxDistance float64
 	for _, loc := range locations {
-		dist := osm.HaversineDistance(centerLat, centerLon, loc.Latitude, loc.Longitude)
+		dist := geo.HaversineDistance(centerLat, centerLon, loc.Latitude, loc.Longitude)
 		if dist > maxDistance {
 			maxDistance = dist
 		}
@@ -343,7 +344,7 @@ func HandleSuggestMeetingPoint(ctx context.Context, req mcp.CallToolRequest) (*m
 	for _, place := range placesOutput.Places {
 		var totalDistance float64
 		for _, loc := range locations {
-			dist := osm.HaversineDistance(
+			dist := geo.HaversineDistance(
 				place.Location.Latitude, place.Location.Longitude,
 				loc.Latitude, loc.Longitude,
 			)
