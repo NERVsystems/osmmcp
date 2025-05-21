@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
 func TestNewServer(t *testing.T) {
-	// TODO: Implement server creation tests
 	s, err := NewServer()
 	if err != nil {
 		t.Errorf("NewServer() error = %v", err)
@@ -17,7 +20,6 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestServer_Run(t *testing.T) {
-	// TODO: Implement server run tests
 	s, err := NewServer()
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
@@ -37,4 +39,18 @@ func TestServer_Run(t *testing.T) {
 	// Shutdown the server
 	s.Shutdown()
 	s.WaitForShutdown()
+}
+
+func TestHandler_Health(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := NewHandler(logger)
+	req := httptest.NewRequest("GET", "/health", nil)
+	rr := httptest.NewRecorder()
+	status, err := h.handleHealth(rr, req)
+	if err != nil {
+		t.Fatalf("handleHealth returned error: %v", err)
+	}
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d", status)
+	}
 }
