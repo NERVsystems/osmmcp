@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NERVsystems/osmmcp/pkg/geo"
+	"github.com/NERVsystems/osmmcp/pkg/osm"
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
@@ -287,7 +289,11 @@ func GetRoute(ctx context.Context, coordinates [][]float64, options OSRMOptions)
 
 	// Sample routes if requested
 	if options.SampleInterval > 0 && len(result.Routes) > 0 {
-		// TODO: Implement route sampling
+		for i, rt := range result.Routes {
+			pts := osm.DecodePolyline(rt.Geometry)
+			sampled := samplePolyline(pts, options.SampleInterval)
+			result.Routes[i].Geometry = osm.EncodePolyline(sampled)
+		}
 	}
 
 	// Cache the result
@@ -429,4 +435,47 @@ func formatInstruction(step OSRMStep) string {
 	}
 
 	return instruction.String()
+}
+
+// samplePolyline resamples a slice of geographic points at the given interval.
+// This mirrors the logic used by the route_sample tool and is used when
+// SampleInterval is specified in OSRMOptions.
+func samplePolyline(points []geo.Location, interval float64) []geo.Location {
+	if len(points) < 2 || interval <= 0 {
+		return points
+	}
+
+	result := []geo.Location{points[0]}
+	current := points[0]
+	remaining := interval
+
+	for i := 0; i < len(points)-1; i++ {
+		start := current
+		end := points[i+1]
+		for {
+			segment := geo.HaversineDistance(start.Latitude, start.Longitude, end.Latitude, end.Longitude)
+			if segment < remaining {
+				remaining -= segment
+				current = end
+				break
+			}
+
+			frac := remaining / segment
+			newPoint := geo.Location{
+				Latitude:  start.Latitude + (end.Latitude-start.Latitude)*frac,
+				Longitude: start.Longitude + (end.Longitude-start.Longitude)*frac,
+			}
+			result = append(result, newPoint)
+			start = newPoint
+			current = newPoint
+			remaining = interval
+		}
+	}
+
+	last := points[len(points)-1]
+	if result[len(result)-1] != last {
+		result = append(result, last)
+	}
+
+	return result
 }

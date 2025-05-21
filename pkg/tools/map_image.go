@@ -159,14 +159,14 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 
 // fetchImageFromURL retrieves an image from a URL
 func fetchImageFromURL(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "NERV-MCP-Client/1.0 (contact: ops@nerv.systems)")
 	req.Header.Set("Referer", "https://github.com/NERVsystems/osmmcp")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := core.DoWithRetry(ctx, req, nil)
 	if err != nil {
 		return nil, err
 	}

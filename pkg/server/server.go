@@ -235,20 +235,137 @@ func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) (int, err
 
 // handleGeocode handles geocoding requests
 func (h *Handler) handleGeocode(w http.ResponseWriter, r *http.Request) (int, error) {
-	// TODO: Implement geocoding handler
-	return http.StatusNotImplemented, nil
+	q := r.URL.Query()
+	address := q.Get("address")
+	region := q.Get("region")
+
+	req := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Name: "geocode_address",
+			Arguments: map[string]any{
+				"address": address,
+			},
+		},
+	}
+	if region != "" {
+		req.Params.Arguments["region"] = region
+	}
+
+	result, err := tools.HandleGeocodeAddress(r.Context(), req)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	var content string
+	for _, c := range result.Content {
+		if t, ok := c.(mcp.TextContent); ok {
+			content = t.Text
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
+	if result.IsError {
+		status = http.StatusBadRequest
+	}
+	w.WriteHeader(status)
+	w.Write([]byte(content))
+	return status, nil
 }
 
 // handlePlaces handles places search requests
 func (h *Handler) handlePlaces(w http.ResponseWriter, r *http.Request) (int, error) {
-	// TODO: Implement places handler
-	return http.StatusNotImplemented, nil
+	q := r.URL.Query()
+	req := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Name: "find_nearby_places",
+			Arguments: map[string]any{
+				"latitude":  q.Get("latitude"),
+				"longitude": q.Get("longitude"),
+				"radius":    q.Get("radius"),
+				"category":  q.Get("category"),
+				"limit":     q.Get("limit"),
+			},
+		},
+	}
+
+	result, err := tools.HandleFindNearbyPlaces(r.Context(), req)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	var content string
+	for _, c := range result.Content {
+		if t, ok := c.(mcp.TextContent); ok {
+			content = t.Text
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
+	if result.IsError {
+		status = http.StatusBadRequest
+	}
+	w.WriteHeader(status)
+	w.Write([]byte(content))
+	return status, nil
 }
 
 // handleRoute handles routing requests
 func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) (int, error) {
-	// TODO: Implement route handler
-	return http.StatusNotImplemented, nil
+	q := r.URL.Query()
+	req := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Name: "route_fetch",
+			Arguments: map[string]any{
+				"start": map[string]any{
+					"latitude":  q.Get("start_lat"),
+					"longitude": q.Get("start_lon"),
+				},
+				"end": map[string]any{
+					"latitude":  q.Get("end_lat"),
+					"longitude": q.Get("end_lon"),
+				},
+				"mode": q.Get("mode"),
+			},
+		},
+	}
+
+	result, err := tools.HandleRouteFetch(r.Context(), req)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	var content string
+	for _, c := range result.Content {
+		if t, ok := c.(mcp.TextContent); ok {
+			content = t.Text
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	status := http.StatusOK
+	if result.IsError {
+		status = http.StatusBadRequest
+	}
+	w.WriteHeader(status)
+	w.Write([]byte(content))
+	return status, nil
 }
 
 // generateRequestID generates a unique request ID
