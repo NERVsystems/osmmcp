@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -42,7 +43,15 @@ const (
 )
 
 // Default region to append for single-token or landmark queries
-var defaultRegion = "Singapore"
+// defaultRegion specifies the region appended to single token queries. It can
+// be overridden via the OSMMCP_DEFAULT_REGION environment variable to make the
+// server behavior configurable in different deployments.
+var defaultRegion = func() string {
+	if env := os.Getenv("OSMMCP_DEFAULT_REGION"); env != "" {
+		return env
+	}
+	return "Singapore"
+}()
 
 // Global cache and request group to deduplicate in-flight requests
 var (
