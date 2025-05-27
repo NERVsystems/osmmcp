@@ -29,12 +29,27 @@ const (
 // TileCache is the cache for map tiles
 var tileCache *cache.TTLCache
 
+// TileResourceManager is the global tile resource manager
+var tileResourceManager *cache.TileResourceManager
+
 // InitTileCache initializes the tile cache
 func InitTileCache() {
 	// Use the existing cache implementation
 	if tileCache == nil {
 		tileCache = cache.NewTTLCache(TileCacheTTL, time.Minute, 1000)
 	}
+}
+
+// InitTileResourceManager initializes the tile resource manager
+func InitTileResourceManager(logger *slog.Logger) {
+	if tileResourceManager == nil {
+		tileResourceManager = cache.NewTileResourceManager(logger)
+	}
+}
+
+// GetTileResourceManager returns the global tile resource manager
+func GetTileResourceManager() *cache.TileResourceManager {
+	return tileResourceManager
 }
 
 // LatLonToTile converts latitude, longitude and zoom to tile coordinates
@@ -59,20 +74,31 @@ func TileToLatLon(x, y, zoom int) (lat, lon float64) {
 	return lat, lon
 }
 
-// FetchMapTile retrieves a map tile with caching
+// FetchMapTile retrieves a map tile with caching and resource management
 func FetchMapTile(ctx context.Context, x, y, zoom int) ([]byte, error) {
 	logger := slog.Default().With("service", "tile_fetcher")
 
 	// Initialize cache if needed
 	InitTileCache()
 
-	// Create cache key
+	// Create cache key for legacy cache
 	cacheKey := fmt.Sprintf("tile:%d:%d:%d", zoom, x, y)
 
-	// Check cache first
+	// Check legacy cache first
 	if cachedData, found := tileCache.Get(cacheKey); found {
 		logger.Debug("tile cache hit", "key", cacheKey)
-		return cachedData.([]byte), nil
+		tileData := cachedData.([]byte)
+
+		// Update resource manager if available
+		if tileResourceManager != nil {
+			uri := fmt.Sprintf("osm://tile/%d/%d/%d", zoom, x, y)
+			err := tileResourceManager.SetTileData(uri, tileData)
+			if err != nil {
+				logger.Warn("failed to update tile resource", "error", err)
+			}
+		}
+
+		return tileData, nil
 	}
 
 	logger.Debug("tile cache miss", "key", cacheKey)
@@ -109,8 +135,19 @@ func FetchMapTile(ctx context.Context, x, y, zoom int) ([]byte, error) {
 		return nil, NewError(ErrInternalError, "Failed to read tile data")
 	}
 
-	// Cache the result
+	// Cache the result in legacy cache
 	tileCache.Set(cacheKey, tileData)
+
+	// Cache as resource if resource manager is available
+	if tileResourceManager != nil {
+		uri := fmt.Sprintf("osm://tile/%d/%d/%d", zoom, x, y)
+		err := tileResourceManager.SetTileData(uri, tileData)
+		if err != nil {
+			logger.Warn("failed to cache tile as resource", "error", err)
+		} else {
+			logger.Debug("tile cached as resource", "uri", uri)
+		}
+	}
 
 	return tileData, nil
 }

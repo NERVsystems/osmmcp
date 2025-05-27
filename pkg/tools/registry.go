@@ -195,6 +195,14 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 			Tool:        SortByDistanceTool(),
 			Handler:     HandleSortByDistance,
 		},
+
+		// Tile cache management
+		{
+			Name:        "tile_cache",
+			Description: "Manage and access cached map tiles. Parameters: action (string: list, get, stats), x (number), y (number), zoom (number)",
+			Tool:        GetTileCacheTool(),
+			Handler:     HandleTileCache,
+		},
 	}
 
 	return defs
