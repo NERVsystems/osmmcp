@@ -98,6 +98,10 @@ func (s *Server) Run() error {
 		if err != nil && err != io.EOF {
 			s.logger.Error("server error", "error", err)
 		}
+
+		// Ensure the main Run loop is notified that the
+		// server has finished processing.
+		s.Shutdown()
 	}()
 
 	// Wait for stop signal
