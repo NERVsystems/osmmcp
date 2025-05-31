@@ -63,12 +63,13 @@ When using the reverse_geocode tool, follow these guidelines:
 
 ## Example Integration with MCP-Go
 
-Here's how to integrate these prompts into your MCP server configuration:
+Here's how to integrate these prompts into your MCP server configuration using the latest mcp-go v0.28.0+ API:
 
 ```go
 package main
 
 import (
+	"context"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/NERVsystems/osmmcp/pkg/tools"
@@ -100,18 +101,23 @@ When using these tools:
 4. Try progressive simplification when address lookups fail
 5. For reverse geocoding, ensure coordinates are in decimal form within valid ranges`
 
-	// Set up an example prompt template
-	promptTemplate := mcp.NewPromptTemplate("geocoding",
-		[]mcp.PromptMessage{
-			mcp.NewPromptMessage(
-				mcp.RoleSystem,
-				mcp.NewTextContent(systemPrompt),
-			),
-		},
+	// Set up the prompt using the new API
+	geocodingPrompt := mcp.NewPrompt("geocoding_system",
+		mcp.WithPromptDescription("System prompt with geocoding instructions"),
 	)
-
-	// Add the prompt template to the server
-	s.AddPromptTemplate(promptTemplate)
+	
+	// Add the prompt with its handler function
+	s.AddPrompt(geocodingPrompt, func(ctx context.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		return mcp.NewGetPromptResult(
+			"Geocoding System Instructions",
+			[]mcp.PromptMessage{
+				mcp.NewPromptMessage(
+					mcp.RoleSystem, 
+					mcp.NewTextContent(systemPrompt),
+				),
+			},
+		), nil
+	})
 
 	// Start the server
 	// ...
