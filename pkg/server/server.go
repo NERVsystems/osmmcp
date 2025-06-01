@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/tools"
 	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
@@ -41,6 +42,9 @@ func NewServer() (*Server, error) {
 	logger.Info("initializing OpenStreetMap MCP server",
 		"name", ServerName,
 		"version", ServerVersion)
+
+	// Initialize tile resource manager
+	core.InitTileResourceManager(logger)
 
 	// Create MCP server with options
 	srv := server.NewMCPServer(
@@ -98,6 +102,10 @@ func (s *Server) Run() error {
 		if err != nil && err != io.EOF {
 			s.logger.Error("server error", "error", err)
 		}
+
+		// Ensure the main Run loop is notified that the
+		// server has finished processing.
+		s.Shutdown()
 	}()
 
 	// Wait for stop signal

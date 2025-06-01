@@ -363,8 +363,8 @@ All core functionality and initial versions developed prior to organisational tr
 ## Documentation
 
 - [GoDoc](https://pkg.go.dev/github.com/NERVsystems/osmmcp) - Full API documentation
-- [Geocoding Tools Guide](pkg/tools/docs/geocoding.md) - Detailed guide for geocoding features
-- [AI Prompts for Geocoding](pkg/tools/docs/ai_prompts.md) - Examples for AI system integration
+- [Geocoding Tools Guide](pkg/tools/docs/geocoding.md) - Detailed guide for geocoding features and best practices
+- [AI Prompts for Geocoding](pkg/tools/docs/ai_prompts.md) - System prompts and examples for AI integration with geocoding tools
 
 ## License
 

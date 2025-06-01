@@ -12,6 +12,7 @@ type OverpassBuilder struct {
 	buf        strings.Builder
 	elements   []string
 	hasElement bool
+	output     string
 }
 
 // NewOverpassBuilder creates a new Overpass query builder with initial settings.
@@ -59,7 +60,11 @@ func (b *OverpassBuilder) Begin() *OverpassBuilder {
 // By default, it uses 'out body;' to include tag information in the results.
 func (b *OverpassBuilder) End() *OverpassBuilder {
 	if b.hasElement {
-		b.buf.WriteString(");out body;")
+		out := "body"
+		if b.output != "" {
+			out = b.output
+		}
+		b.buf.WriteString(fmt.Sprintf(");out %s;", out))
 	}
 	return b
 }
@@ -67,8 +72,24 @@ func (b *OverpassBuilder) End() *OverpassBuilder {
 // WithOutput specifies a custom output format (default is 'body').
 // Common options include 'body', 'center', 'geom', etc.
 func (b *OverpassBuilder) WithOutput(outputType string) *OverpassBuilder {
+	prev := b.output
+	b.output = outputType
 	if b.hasElement {
-		b.buf.WriteString(fmt.Sprintf(");out %s;", outputType))
+		current := b.buf.String()
+		const defaultOut = ";out body;"
+		if strings.HasSuffix(current, defaultOut) {
+			current = strings.TrimSuffix(current, defaultOut)
+			b.buf.Reset()
+			b.buf.WriteString(current)
+		} else if prev != "" {
+			prevOut := fmt.Sprintf(";out %s;", prev)
+			if strings.HasSuffix(current, prevOut) {
+				current = strings.TrimSuffix(current, prevOut)
+				b.buf.Reset()
+				b.buf.WriteString(current)
+			}
+		}
+		b.buf.WriteString(fmt.Sprintf(";out %s;", outputType))
 	}
 	return b
 }

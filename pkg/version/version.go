@@ -8,7 +8,7 @@ import (
 
 var (
 	// BuildVersion is the semantic version of the build
-	BuildVersion = "0.2.0"
+	BuildVersion = "0.1.2"
 
 	// BuildCommit is the git commit hash of the build
 	BuildCommit = "unknown"
