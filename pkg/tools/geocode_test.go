@@ -88,7 +88,7 @@ func TestHandleGeocodeAddress(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta `json:"_meta,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Name: "geocode_address",
 					Arguments: map[string]any{
@@ -256,7 +256,7 @@ func TestHandleReverseGeocode(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta `json:"_meta,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Name: "reverse_geocode",
 					Arguments: map[string]any{
@@ -394,7 +394,7 @@ func TestParentheticalHandling(t *testing.T) {
 		Params: struct {
 			Name      string         `json:"name"`
 			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta `json:"_meta,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
 		}{
 			Name: "geocode_address",
 			Arguments: map[string]any{

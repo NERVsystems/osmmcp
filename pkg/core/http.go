@@ -84,7 +84,8 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 		newReq := req.Clone(ctx)
 		if req.Body != nil {
 			logger.Error("request with body cannot be retried automatically, use a request factory function")
-			return nil, fmt.Errorf("cannot retry request with non-nil body")
+			return nil, NewError(ErrInternalError, "cannot retry request with non-nil body").
+				WithGuidance("Use a request factory function for requests with bodies")
 		}
 
 		// Add security headers
@@ -110,7 +111,7 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 				"url", req.URL.String(),
 			)
 		} else {
-			lastErr = fmt.Errorf("HTTP status %d", resp.StatusCode)
+			lastErr = ServiceError("HTTP", resp.StatusCode, fmt.Sprintf("HTTP status %d", resp.StatusCode))
 			logger.Error("request returned error status",
 				"status", resp.StatusCode,
 				"attempt", attempt+1,
@@ -121,7 +122,11 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 		}
 	}
 
-	return nil, fmt.Errorf("max retries reached: %w", lastErr)
+	if mcpErr, ok := lastErr.(*MCPError); ok {
+		return nil, mcpErr.WithGuidance("Maximum retry attempts reached. " + mcpErr.Guidance)
+	}
+	return nil, NewError(ErrNetworkError, "max retries reached").
+		WithGuidance("The request failed after multiple attempts. Please try again later")
 }
 
 // DoWithRetry performs an HTTP request with default retry options
@@ -174,7 +179,8 @@ func WithRetryFactory(ctx context.Context, factory RequestFactory, client *http.
 		// Create a new request
 		req, err := factory()
 		if err != nil {
-			lastErr = fmt.Errorf("failed to create request: %w", err)
+			lastErr = NewError(ErrInternalError, "failed to create request").
+				WithGuidance("Unable to create HTTP request. Check the request parameters")
 			logger.Error("request creation failed",
 				"error", err,
 				"attempt", attempt+1,
@@ -209,7 +215,7 @@ func WithRetryFactory(ctx context.Context, factory RequestFactory, client *http.
 				"url", req.URL.String(),
 			)
 		} else {
-			lastErr = fmt.Errorf("HTTP status %d", resp.StatusCode)
+			lastErr = ServiceError("HTTP", resp.StatusCode, fmt.Sprintf("HTTP status %d", resp.StatusCode))
 			logger.Error("request returned error status",
 				"status", resp.StatusCode,
 				"attempt", attempt+1,
@@ -220,5 +226,9 @@ func WithRetryFactory(ctx context.Context, factory RequestFactory, client *http.
 		}
 	}
 
-	return nil, fmt.Errorf("max retries reached: %w", lastErr)
+	if mcpErr, ok := lastErr.(*MCPError); ok {
+		return nil, mcpErr.WithGuidance("Maximum retry attempts reached. " + mcpErr.Guidance)
+	}
+	return nil, NewError(ErrNetworkError, "max retries reached").
+		WithGuidance("The request failed after multiple attempts. Please try again later")
 }

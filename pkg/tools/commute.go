@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -67,7 +68,8 @@ func ParseArray(req mcp.CallToolRequest, paramName string) ([]interface{}, error
 	// Check if parameter exists
 	param, ok := req.Params.Arguments[paramName]
 	if !ok {
-		return nil, fmt.Errorf("parameter %s not found", paramName)
+		return nil, core.NewError(core.ErrMissingParameter, fmt.Sprintf("parameter %s not found", paramName)).
+			WithGuidance("Ensure all required parameters are provided in the request")
 	}
 
 	// Check if it's already an array
@@ -78,12 +80,14 @@ func ParseArray(req mcp.CallToolRequest, paramName string) ([]interface{}, error
 	// Try to convert from JSON
 	jsonBytes, err := json.Marshal(param)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal parameter: %v", err)
+		return nil, core.NewError(core.ErrInternalError, "failed to marshal parameter").
+			WithGuidance("The parameter could not be processed. Check the parameter format")
 	}
 
 	var result []interface{}
 	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse array: %v", err)
+		return nil, core.NewError(core.ErrParseError, "failed to parse array parameter").
+			WithGuidance("The parameter must be a valid JSON array")
 	}
 
 	return result, nil

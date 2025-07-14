@@ -31,6 +31,8 @@ type TTLCache struct {
 	cleanupInterval time.Duration
 	maxItems        int
 	stopCleanup     chan bool
+	cleanupStarted  sync.Once
+	cleanupStopped  sync.Once
 }
 
 // NewTTLCache creates a new cache with the specified TTL and cleanup interval
@@ -164,18 +166,20 @@ func (c *TTLCache) startCleanupTimer() {
 		return
 	}
 
-	ticker := time.NewTicker(c.cleanupInterval)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				c.deleteExpired()
-			case <-c.stopCleanup:
-				ticker.Stop()
-				return
+	c.cleanupStarted.Do(func() {
+		ticker := time.NewTicker(c.cleanupInterval)
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					c.deleteExpired()
+				case <-c.stopCleanup:
+					ticker.Stop()
+					return
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // deleteExpired deletes all expired items
@@ -193,13 +197,16 @@ func (c *TTLCache) deleteExpired() {
 
 // Stop stops the cleanup timer
 func (c *TTLCache) Stop() {
-	close(c.stopCleanup)
+	c.cleanupStopped.Do(func() {
+		close(c.stopCleanup)
+	})
 }
 
 // Global cache instance
 var (
 	globalCache     *TTLCache
 	globalCacheOnce sync.Once
+	globalCacheMu   sync.Mutex
 )
 
 // GetGlobalCache returns the global cache instance
@@ -209,4 +216,14 @@ func GetGlobalCache() *TTLCache {
 		globalCache = NewTTLCache(5*time.Minute, time.Minute, 1000)
 	})
 	return globalCache
+}
+
+// StopGlobalCache stops the global cache cleanup routine
+func StopGlobalCache() {
+	globalCacheMu.Lock()
+	defer globalCacheMu.Unlock()
+	
+	if globalCache != nil {
+		globalCache.Stop()
+	}
 }

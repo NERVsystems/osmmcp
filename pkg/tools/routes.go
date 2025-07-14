@@ -415,17 +415,20 @@ func extractLocations(req mcp.CallToolRequest) ([]struct {
 	// Convert the locations parameter to JSON
 	locationsRaw, ok := req.Params.Arguments["locations"]
 	if !ok {
-		return nil, fmt.Errorf("missing required locations parameter")
+		return nil, core.NewError(core.ErrMissingParameter, "missing required locations parameter").
+			WithGuidance("The locations parameter is required and must be an array of waypoints")
 	}
 
 	// Marshal and unmarshal to convert to our struct
 	locationsJSON, err := json.Marshal(locationsRaw)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal locations: %v", err)
+		return nil, core.NewError(core.ErrInternalError, "failed to marshal locations").
+			WithGuidance("Unable to process the locations parameter")
 	}
 
 	if err := json.Unmarshal(locationsJSON, &locations); err != nil {
-		return nil, fmt.Errorf("failed to parse locations array: %v", err)
+		return nil, core.NewError(core.ErrParseError, "failed to parse locations array").
+			WithGuidance("The locations parameter must be a valid JSON array of waypoint objects")
 	}
 
 	return locations, nil

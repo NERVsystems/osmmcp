@@ -321,11 +321,13 @@ func resultToPlace(result NominatimResult) (Place, error) {
 	// Convert lat/lon to float64
 	var lat, lon float64
 	if _, err := fmt.Sscanf(result.Lat, "%f", &lat); err != nil {
-		return Place{}, fmt.Errorf("failed to parse latitude: %w", err)
+		return Place{}, core.NewError(core.ErrParseError, "failed to parse latitude").
+			WithGuidance("Received invalid latitude format from geocoding service")
 	}
 
 	if _, err := fmt.Sscanf(result.Lon, "%f", &lon); err != nil {
-		return Place{}, fmt.Errorf("failed to parse longitude: %w", err)
+		return Place{}, core.NewError(core.ErrParseError, "failed to parse longitude").
+			WithGuidance("Received invalid longitude format from geocoding service")
 	}
 
 	// Get city (could be in city or town field)

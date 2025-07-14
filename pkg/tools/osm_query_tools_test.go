@@ -158,7 +158,7 @@ func TestHandleFilterTags(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta `json:"_meta,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Name: "filter_tags",
 					Arguments: map[string]any{
@@ -312,7 +312,7 @@ func TestHandleSortByDistance(t *testing.T) {
 				Params: struct {
 					Name      string         `json:"name"`
 					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta `json:"_meta,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Name: "sort_by_distance",
 					Arguments: map[string]any{
@@ -373,4 +373,131 @@ func TestHandleSortByDistance(t *testing.T) {
 	}
 }
 
-// Note: TestHandleOSMQueryBBox is omitted because it would require mocking an external OSM API call
+func TestHandleOSMQueryBBox_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name        string
+		bbox        map[string]float64
+		tags        map[string]string
+		expectError bool
+		description string
+	}{
+		{
+			name: "Invalid bounding box - minLat >= maxLat",
+			bbox: map[string]float64{
+				"minLat": 50.0,
+				"minLon": -1.0,
+				"maxLat": 40.0, // Invalid: minLat >= maxLat
+				"maxLon": 1.0,
+			},
+			tags: map[string]string{
+				"amenity": "restaurant",
+			},
+			expectError: true,
+			description: "Should reject invalid bounding box with minLat >= maxLat",
+		},
+		{
+			name: "Invalid bounding box - minLon >= maxLon",
+			bbox: map[string]float64{
+				"minLat": 40.0,
+				"minLon": 1.0,
+				"maxLat": 50.0,
+				"maxLon": -1.0, // Invalid: minLon >= maxLon
+			},
+			tags: map[string]string{
+				"amenity": "restaurant",
+			},
+			expectError: true,
+			description: "Should reject invalid bounding box with minLon >= maxLon",
+		},
+		{
+			name: "Invalid coordinates - latitude out of range",
+			bbox: map[string]float64{
+				"minLat": -100.0, // Invalid latitude
+				"minLon": -1.0,
+				"maxLat": 50.0,
+				"maxLon": 1.0,
+			},
+			tags: map[string]string{
+				"amenity": "restaurant",
+			},
+			expectError: true,
+			description: "Should reject invalid latitude coordinates",
+		},
+		{
+			name: "Invalid coordinates - longitude out of range",
+			bbox: map[string]float64{
+				"minLat": 40.0,
+				"minLon": -200.0, // Invalid longitude
+				"maxLat": 50.0,
+				"maxLon": 1.0,
+			},
+			tags: map[string]string{
+				"amenity": "restaurant",
+			},
+			expectError: true,
+			description: "Should reject invalid longitude coordinates",
+		},
+		{
+			name: "Empty tags",
+			bbox: map[string]float64{
+				"minLat": 40.0,
+				"minLon": -1.0,
+				"maxLat": 50.0,
+				"maxLon": 1.0,
+			},
+			tags:        map[string]string{},
+			expectError: true,
+			description: "Should reject empty tags",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create test request
+			req := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Name: "osm_query_bbox",
+					Arguments: map[string]any{
+						"bbox": tt.bbox,
+						"tags": tt.tags,
+					},
+				},
+			}
+
+			// Call handler
+			result, err := HandleOSMQueryBBox(context.Background(), req)
+
+			// Check for unexpected errors
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			// For expected error case
+			if tt.expectError {
+				AssertErrorResult(t, result, tt.description)
+				// Verify the error message contains useful information
+				if result.Content != nil && len(result.Content) > 0 {
+					if text, ok := result.Content[0].(mcp.TextContent); ok {
+						errorText := text.Text
+						// Check that the error message is not generic
+						if errorText == "Overpass API error: 400" {
+							t.Errorf("Error message is too generic: %s", errorText)
+						}
+						// Check that the error message contains helpful guidance
+						if len(errorText) < 10 {
+							t.Errorf("Error message is too short to be helpful: %s", errorText)
+						}
+					}
+				}
+				return
+			}
+
+			// Should not be an error result
+			AssertSuccessResult(t, result, tt.description)
+		})
+	}
+}

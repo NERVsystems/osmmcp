@@ -284,7 +284,8 @@ func GetRoute(ctx context.Context, coordinates [][]float64, options OSRMOptions)
 
 	// Check for OSRM error
 	if result.Code != "Ok" {
-		return nil, fmt.Errorf("OSRM error: %s", result.Message)
+		return nil, NewError(ErrServiceUnavailable, fmt.Sprintf("OSRM error: %s", result.Message)).
+			WithGuidance("The routing service encountered an error. Please check your coordinates and try again")
 	}
 
 	// Sample routes if requested
@@ -333,7 +334,8 @@ func GetSimpleRoute(ctx context.Context, from, to []float64, mode string) (*Simp
 
 	// Check if we have any routes
 	if len(result.Routes) == 0 {
-		return nil, fmt.Errorf("no routes found")
+		return nil, NewError(ErrNoResults, "no routes found").
+			WithGuidance("No route could be calculated between these points. The locations may be inaccessible by the selected mode of transport")
 	}
 
 	// Use the first (best) route

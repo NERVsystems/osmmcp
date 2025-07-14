@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -118,7 +119,7 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 		input.BBox.MaxLat, input.BBox.MaxLon,
 		input.Tags,
 	)
-	queryBuilder.WithOutput("center")
+	queryBuilder.End().WithOutput("center")
 	overpassQuery := queryBuilder.Build()
 
 	// Log the generated query for debugging
@@ -166,7 +167,20 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 	// Process response
 	if resp.StatusCode != http.StatusOK {
 		logger.Error("Overpass API returned error", "status", resp.StatusCode)
-		return ErrorResponse(fmt.Sprintf("Overpass API error: %d", resp.StatusCode)), nil
+		// Read error response body if available
+		var errorMsg string
+		if bodyBytes, readErr := io.ReadAll(resp.Body); readErr == nil {
+			errorMsg = string(bodyBytes)
+			if len(errorMsg) > 500 {
+				errorMsg = errorMsg[:500] + "..."
+			}
+		}
+		if errorMsg == "" {
+			errorMsg = fmt.Sprintf("Overpass API returned status %d", resp.StatusCode)
+		} else {
+			errorMsg = fmt.Sprintf("Overpass API returned status %d: %s", resp.StatusCode, errorMsg)
+		}
+		return ErrorWithGuidance(NewAPIError("Overpass", resp.StatusCode, errorMsg, "")), nil
 	}
 
 	// Parse response

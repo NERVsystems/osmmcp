@@ -176,3 +176,79 @@ func NewOSMClient() *Client {
 func (c *Client) SetLogger(logger *slog.Logger) {
 	c.logger = logger
 }
+
+// Health check functions for external services
+// CheckNominatimHealth checks if Nominatim service is available
+func CheckNominatimHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Make a simple status request to Nominatim
+	req, err := http.NewRequestWithContext(ctx, "GET", NominatimBaseURL+"/status", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create nominatim health check request: %w", err)
+	}
+	
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("nominatim health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("nominatim health check returned status %d", resp.StatusCode)
+	}
+	
+	return nil
+}
+
+// CheckOverpassHealth checks if Overpass API is available
+func CheckOverpassHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Make a simple status request to Overpass
+	req, err := http.NewRequestWithContext(ctx, "GET", OverpassBaseURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create overpass health check request: %w", err)
+	}
+	
+	// Add a simple query to check if the service is responsive
+	req.URL.RawQuery = "data=[out:json];out meta;"
+	
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("overpass health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("overpass health check returned status %d", resp.StatusCode)
+	}
+	
+	return nil
+}
+
+// CheckOSRMHealth checks if OSRM service is available
+func CheckOSRMHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	
+	// Make a simple status request to OSRM
+	req, err := http.NewRequestWithContext(ctx, "GET", OSRMBaseURL+"/nearest/v1/driving/0,0", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create osrm health check request: %w", err)
+	}
+	
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("osrm health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("osrm health check returned status %d", resp.StatusCode)
+	}
+	
+	return nil
+}

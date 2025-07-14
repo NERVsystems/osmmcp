@@ -14,7 +14,7 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/tools"
 	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
 const (
@@ -27,13 +27,15 @@ const (
 
 // Server encapsulates the MCP server with OpenStreetMap tools.
 type Server struct {
-	srv     *server.MCPServer
-	logger  *slog.Logger
-	stopCh  chan struct{}
-	doneCh  chan struct{}
-	running bool
-	mu      sync.Mutex
-	once    sync.Once // Ensure we only close stopCh once
+	srv          *mcpserver.MCPServer
+	logger       *slog.Logger
+	stopCh       chan struct{}
+	doneCh       chan struct{}
+	running      bool
+	mu           sync.Mutex
+	once         sync.Once // Ensure we only close stopCh once
+	ctxCancel    context.CancelFunc
+	ctxGoroutine sync.Once // Ensure we only start one context goroutine
 }
 
 // NewServer creates a new OpenStreetMap MCP server with all tools registered.
@@ -47,11 +49,11 @@ func NewServer() (*Server, error) {
 	core.InitTileResourceManager(logger)
 
 	// Create MCP server with options
-	srv := server.NewMCPServer(
+	srv := mcpserver.NewMCPServer(
 		ServerName,
 		ServerVersion,
-		server.WithToolCapabilities(false),
-		server.WithRecovery(),
+		mcpserver.WithToolCapabilities(false),
+		mcpserver.WithRecovery(),
 	)
 
 	// Create tool registry and register all tools and prompts
@@ -98,7 +100,7 @@ func (s *Server) Run() error {
 	// Run the server in a goroutine
 	go func() {
 		defer close(s.doneCh)
-		err := server.ServeStdio(s.srv)
+		err := mcpserver.ServeStdio(s.srv)
 		if err != nil && err != io.EOF {
 			s.logger.Error("server error", "error", err)
 		}
@@ -124,14 +126,20 @@ func (s *Server) Run() error {
 // This method blocks until the context is canceled or an error occurs.
 func (s *Server) RunWithContext(ctx context.Context) error {
 	// Create a goroutine to watch the context for cancellation
-	go func() {
-		select {
-		case <-ctx.Done():
-			s.Shutdown()
-		case <-s.stopCh:
-			// Already being shut down
-		}
-	}()
+	s.ctxGoroutine.Do(func() {
+		// Create a derived context that we can cancel
+		derived, cancel := context.WithCancel(ctx)
+		s.ctxCancel = cancel
+		
+		go func() {
+			select {
+			case <-derived.Done():
+				s.Shutdown()
+			case <-s.stopCh:
+				// Already being shut down
+			}
+		}()
+	})
 
 	return s.Run()
 }
@@ -152,11 +160,21 @@ func (s *Server) Shutdown() {
 	s.once.Do(func() {
 		close(s.stopCh)
 	})
+	
+	// Cancel the context if we have one
+	if s.ctxCancel != nil {
+		s.ctxCancel()
+	}
 }
 
 // WaitForShutdown blocks until the server has fully shut down.
 func (s *Server) WaitForShutdown() {
 	<-s.doneCh
+}
+
+// GetMCPServer returns the underlying MCP server instance for HTTP transport
+func (s *Server) GetMCPServer() *mcpserver.MCPServer {
+	return s.srv
 }
 
 // Handler represents the HTTP server handler
