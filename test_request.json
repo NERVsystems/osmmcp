@@ -1,1 +1,0 @@
-{"jsonrpc":"2.0","id":1,"method":"mcp.tools.call","params":{"name":"get_map_tile","arguments":{"latitude":37.7749,"longitude":-122.4194,"zoom":14}}} 

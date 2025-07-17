@@ -40,4 +40,27 @@ claude-desktop-config.json
 # Scratch space
 tmp/
 tmp/**/* 
-osmmcp
+
+# Log files
+*.log
+logs/
+
+# Test files and artifacts
+test_*.go
+test_*.json
+test_*.png
+test_*.txt
+*.test.json
+
+# Swap files
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist/
+build/
+
+# Coverage files
+coverage.out
+coverage.html
