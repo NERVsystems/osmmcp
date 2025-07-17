@@ -130,7 +130,7 @@ func (s *Server) RunWithContext(ctx context.Context) error {
 		// Create a derived context that we can cancel
 		derived, cancel := context.WithCancel(ctx)
 		s.ctxCancel = cancel
-		
+
 		go func() {
 			select {
 			case <-derived.Done():
@@ -160,7 +160,7 @@ func (s *Server) Shutdown() {
 	s.once.Do(func() {
 		close(s.stopCh)
 	})
-	
+
 	// Cancel the context if we have one
 	if s.ctxCancel != nil {
 		s.ctxCancel()

@@ -222,7 +222,7 @@ func GetGlobalCache() *TTLCache {
 func StopGlobalCache() {
 	globalCacheMu.Lock()
 	defer globalCacheMu.Unlock()
-	
+
 	if globalCache != nil {
 		globalCache.Stop()
 	}

@@ -37,7 +37,7 @@ var (
 	httpBaseURL   string
 	httpAuthType  string
 	httpAuthToken string
-	
+
 	// Monitoring flags
 	enableMonitoring bool
 	monitoringAddr   string
@@ -64,7 +64,7 @@ func init() {
 	flag.StringVar(&httpBaseURL, "http-base-url", "", "Base URL for HTTP transport (auto-detected if empty)")
 	flag.StringVar(&httpAuthType, "http-auth-type", "none", "HTTP authentication type: none, bearer, basic")
 	flag.StringVar(&httpAuthToken, "http-auth-token", "", "HTTP authentication token")
-	
+
 	// Monitoring flags
 	flag.BoolVar(&enableMonitoring, "enable-monitoring", true, "Enable Prometheus metrics and health endpoints")
 	flag.StringVar(&monitoringAddr, "monitoring-addr", ":9090", "Monitoring server address")
@@ -142,13 +142,13 @@ func main() {
 		"osrm_burst", osrmBurst,
 		"monitoring_enabled", enableMonitoring,
 		"monitoring_addr", monitoringAddr)
-	
+
 	// Initialize health checker
 	var healthChecker *monitoring.HealthChecker
 	if enableMonitoring {
 		healthChecker = monitoring.NewHealthChecker(monitoring.ServiceName, ver.BuildVersion)
 		defer healthChecker.Shutdown()
-		
+
 		// Set up monitoring hooks for OSM client
 		osm.SetMonitoringHooks(&osm.MonitoringHooks{
 			OnRequest: func(service, operation string) {
@@ -178,7 +178,7 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "DEBUG: Server instance created successfully\n")
-	
+
 	// Start monitoring external services if health checker is enabled
 	if healthChecker != nil {
 		startExternalServiceMonitoring(healthChecker, logger)
@@ -187,31 +187,31 @@ func main() {
 	// Create context for graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	
+
 	// Start monitoring server if enabled (Prometheus metrics only)
 	var monitoringServer *http.Server
 	if enableMonitoring {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
-		
+
 		monitoringServer = &http.Server{
 			Addr:    monitoringAddr,
 			Handler: mux,
 		}
-		
+
 		go func() {
 			logger.Info("starting Prometheus metrics server", "addr", monitoringAddr)
 			if err := monitoringServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Error("monitoring server error", "error", err)
 			}
 		}()
-		
+
 		// Setup graceful shutdown for monitoring server
 		go func() {
 			<-ctx.Done()
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			
+
 			if err := monitoringServer.Shutdown(shutdownCtx); err != nil {
 				logger.Error("failed to shutdown monitoring server", "error", err)
 			}
@@ -231,7 +231,7 @@ func main() {
 		}
 
 		httpTransport = server.NewHTTPTransport(s.GetMCPServer(), config, logger)
-		
+
 		// Set health checker if enabled
 		if healthChecker != nil {
 			httpTransport.SetHealthChecker(healthChecker)
@@ -278,10 +278,10 @@ func generateClientConfig(path string, mergeOnly bool) error {
 		return fmt.Errorf("config file must have .json extension")
 	}
 
-	// Clean the path and check for path traversal attempts
+	// Clean the path and validate it's safe
 	cleanPath := filepath.Clean(path)
-	if strings.Contains(cleanPath, "..") || filepath.IsAbs(cleanPath) {
-		return fmt.Errorf("refusing to traverse outside workspace")
+	if err := validateSafePath(cleanPath); err != nil {
+		return fmt.Errorf("invalid config path: %w", err)
 	}
 
 	// Create config directory if it doesn't exist
@@ -334,6 +334,39 @@ func generateClientConfig(path string, mergeOnly bool) error {
 	return nil
 }
 
+// validateSafePath validates that a path is safe to write to within the current working directory
+func validateSafePath(path string) error {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Resolve the absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Check if the resolved path is within the current working directory
+	relPath, err := filepath.Rel(cwd, absPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine relative path: %w", err)
+	}
+
+	// Reject paths that go outside the working directory
+	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path traversal detected: %s", relPath)
+	}
+
+	// Additional safety checks
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("absolute paths are not allowed for security reasons")
+	}
+
+	return nil
+}
+
 // showVersion displays version information and exits
 func showVersion() {
 	fmt.Println(ver.String())
@@ -351,8 +384,8 @@ func startExternalServiceMonitoring(healthChecker *monitoring.HealthChecker, log
 		30*time.Second,
 	)
 	nominatimMonitor.Start()
-	
-	// Monitor Overpass service  
+
+	// Monitor Overpass service
 	overpassMonitor := monitoring.NewConnectionMonitor(
 		"overpass",
 		healthChecker,
@@ -362,7 +395,7 @@ func startExternalServiceMonitoring(healthChecker *monitoring.HealthChecker, log
 		30*time.Second,
 	)
 	overpassMonitor.Start()
-	
+
 	// Monitor OSRM service
 	osrmMonitor := monitoring.NewConnectionMonitor(
 		"osrm",
@@ -373,7 +406,7 @@ func startExternalServiceMonitoring(healthChecker *monitoring.HealthChecker, log
 		30*time.Second,
 	)
 	osrmMonitor.Start()
-	
+
 	logger.Info("started external service monitoring",
 		"services", []string{"nominatim", "overpass", "osrm"},
 		"check_interval", "30s")
