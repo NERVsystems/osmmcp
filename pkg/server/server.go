@@ -255,7 +255,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleHealth(w http.ResponseWriter, r *http.Request) (int, error) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	
+	if _, err := w.Write([]byte(`{"status":"ok"}`)); err != nil {
+		h.logger.Error("failed to write health response", "error", err)
+		return http.StatusOK, err // Status already written, but return error for logging
+	}
+	
 	return http.StatusOK, nil
 }
 
@@ -300,7 +305,12 @@ func (h *Handler) handleGeocode(w http.ResponseWriter, r *http.Request) (int, er
 		status = http.StatusBadRequest
 	}
 	w.WriteHeader(status)
-	w.Write([]byte(content))
+	
+	if _, err := w.Write([]byte(content)); err != nil {
+		h.logger.Error("failed to write geocode response", "error", err)
+		return status, err
+	}
+	
 	return status, nil
 }
 
@@ -343,7 +353,12 @@ func (h *Handler) handlePlaces(w http.ResponseWriter, r *http.Request) (int, err
 		status = http.StatusBadRequest
 	}
 	w.WriteHeader(status)
-	w.Write([]byte(content))
+	
+	if _, err := w.Write([]byte(content)); err != nil {
+		h.logger.Error("failed to write places response", "error", err)
+		return status, err
+	}
+	
 	return status, nil
 }
 
@@ -390,7 +405,12 @@ func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) (int, erro
 		status = http.StatusBadRequest
 	}
 	w.WriteHeader(status)
-	w.Write([]byte(content))
+	
+	if _, err := w.Write([]byte(content)); err != nil {
+		h.logger.Error("failed to write route response", "error", err)
+		return status, err
+	}
+	
 	return status, nil
 }
 

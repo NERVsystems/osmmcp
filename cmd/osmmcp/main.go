@@ -195,8 +195,9 @@ func main() {
 		mux.Handle("/metrics", promhttp.Handler())
 
 		monitoringServer = &http.Server{
-			Addr:    monitoringAddr,
-			Handler: mux,
+			Addr:              monitoringAddr,
+			Handler:           mux,
+			ReadHeaderTimeout: 30 * time.Second, // Prevent Slowloris attacks
 		}
 
 		go func() {
@@ -286,7 +287,7 @@ func generateClientConfig(path string, mergeOnly bool) error {
 
 	// Create config directory if it doesn't exist
 	configDir := filepath.Dir(cleanPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil { // More restrictive permissions
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 

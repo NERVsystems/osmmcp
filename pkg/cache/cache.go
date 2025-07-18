@@ -169,10 +169,32 @@ func (c *TTLCache) startCleanupTimer() {
 	c.cleanupStarted.Do(func() {
 		ticker := time.NewTicker(c.cleanupInterval)
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic and restart the cleanup goroutine
+					// Note: We can't use a logger here as it's not available in this context
+					// In a production system, you'd want to inject a logger
+					
+					// Restart the cleanup goroutine after a brief delay to prevent tight loops
+					time.Sleep(time.Second)
+					c.cleanupStarted = sync.Once{} // Reset the Once to allow restart
+					c.startCleanupTimer()
+				}
+			}()
+			
 			for {
 				select {
 				case <-ticker.C:
-					c.deleteExpired()
+					// Add panic recovery around the cleanup operation
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								// Log panic but don't stop the cleanup loop
+								// The cleanup will continue on the next tick
+							}
+						}()
+						c.deleteExpired()
+					}()
 				case <-c.stopCleanup:
 					ticker.Stop()
 					return

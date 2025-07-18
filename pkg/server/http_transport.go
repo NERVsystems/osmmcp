@@ -224,22 +224,19 @@ func (t *HTTPTransport) handleServiceDiscovery(w http.ResponseWriter, r *http.Re
 		baseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
 
+	// Minimal service discovery to avoid information disclosure
 	discovery := map[string]interface{}{
-		"service":   ServerName,
-		"version":   ServerVersion,
+		"service":   "mcp-server", // Generic service name
 		"transport": "HTTP+SSE",
 		"endpoints": map[string]string{
 			"sse":     baseURL + t.config.SSEEndpoint,
 			"message": baseURL + t.config.MsgEndpoint,
 		},
 		"capabilities": map[string]interface{}{
-			"tools":     true,
-			"prompts":   true,
-			"resources": false,
-			"logging":   true,
+			"tools":   true,
+			"prompts": true,
 		},
 		"auth": map[string]interface{}{
-			"type":     t.config.AuthType,
 			"required": t.config.AuthType != "none",
 		},
 	}
@@ -267,12 +264,10 @@ func (t *HTTPTransport) handleHealth(w http.ResponseWriter, r *http.Request) {
 		// Use the health checker for comprehensive health status
 		hc.HealthHandler()(w, r)
 	} else {
-		// Fallback to simple health check
+		// Fallback to simple health check (minimal info)
 		health := map[string]interface{}{
-			"status":    "ok",
-			"timestamp": time.Now().UTC().Format(time.RFC3339),
-			"service":   ServerName,
-			"version":   ServerVersion,
+			"status": "ok",
+			// Remove timestamp, service name, and version to prevent information disclosure
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -301,10 +296,12 @@ func (t *HTTPTransport) handleReady(w http.ResponseWriter, r *http.Request) {
 		// Fallback to simple ready response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"ready":  true,
 			"status": "ok",
-		})
+		}); err != nil {
+			t.logger.Error("failed to encode ready response", "error", err)
+		}
 	}
 }
 
@@ -325,10 +322,12 @@ func (t *HTTPTransport) handleLive(w http.ResponseWriter, r *http.Request) {
 		// Fallback to simple alive response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"alive":  true,
-			"uptime": time.Since(time.Now()).String(), // Will be 0s
-		})
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"alive": true,
+			// Remove uptime to prevent timing information disclosure
+		}); err != nil {
+			t.logger.Error("failed to encode liveness response", "error", err)
+		}
 	}
 }
 

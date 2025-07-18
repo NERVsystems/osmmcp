@@ -50,16 +50,37 @@ func (rl *RateLimiter) cleanupVisitors() {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
+	defer func() {
+		if r := recover(); r != nil {
+			// Log panic and restart cleanup goroutine
+			// In a production system, you'd want to inject a logger
+			
+			// Restart the cleanup goroutine after a brief delay
+			time.Sleep(time.Second)
+			go rl.cleanupVisitors()
+		}
+	}()
+
 	for {
 		select {
 		case <-ticker.C:
-			rl.mu.Lock()
-			for ip, v := range rl.visitors {
-				if time.Since(v.lastSeen) > 3*time.Minute {
-					delete(rl.visitors, ip)
+			// Add panic recovery around the cleanup operation
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// Log panic but don't stop the cleanup loop
+						// The cleanup will continue on the next tick
+					}
+				}()
+				
+				rl.mu.Lock()
+				for ip, v := range rl.visitors {
+					if time.Since(v.lastSeen) > 3*time.Minute {
+						delete(rl.visitors, ip)
+					}
 				}
-			}
-			rl.mu.Unlock()
+				rl.mu.Unlock()
+			}()
 		case <-rl.cleanup:
 			return
 		}

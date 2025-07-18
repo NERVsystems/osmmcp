@@ -184,7 +184,9 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 		// Process response
 		if resp.StatusCode != http.StatusOK {
 			logger.Error("routing service returned error", "status", resp.StatusCode)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 			continue
 		}
 
@@ -210,10 +212,14 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 
 		if err := json.NewDecoder(resp.Body).Decode(&osrmResp); err != nil {
 			logger.Error("failed to decode response", "error", err)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 			continue
 		}
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("failed to close response body", "error", err)
+		}
 
 		// Check if any routes were found
 		if len(osrmResp.Routes) == 0 {

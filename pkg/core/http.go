@@ -118,7 +118,9 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 				"url", req.URL.String(),
 				"response_headers", resp.Header,
 			)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 		}
 	}
 
@@ -222,7 +224,9 @@ func WithRetryFactory(ctx context.Context, factory RequestFactory, client *http.
 				"url", req.URL.String(),
 				"response_headers", resp.Header,
 			)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 		}
 	}
 
