@@ -397,7 +397,7 @@ func (t *HTTPTransport) writeJSONRPCError(w http.ResponseWriter, id interface{},
 // Start begins serving HTTP requests
 func (t *HTTPTransport) Start() error {
 	t.mu.Lock()
-	
+
 	if t.httpSrv != nil {
 		t.mu.Unlock()
 		return core.NewError(core.ErrInternalError, "HTTP transport already started").
