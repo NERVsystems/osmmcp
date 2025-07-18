@@ -54,7 +54,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 		if r := recover(); r != nil {
 			// Log panic and restart cleanup goroutine
 			// In a production system, you'd want to inject a logger
-			
+
 			// Restart the cleanup goroutine after a brief delay
 			time.Sleep(time.Second)
 			go rl.cleanupVisitors()
@@ -72,7 +72,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 						// The cleanup will continue on the next tick
 					}
 				}()
-				
+
 				rl.mu.Lock()
 				for ip, v := range rl.visitors {
 					if time.Since(v.lastSeen) > 3*time.Minute {

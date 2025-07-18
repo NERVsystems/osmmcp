@@ -174,14 +174,14 @@ func (c *TTLCache) startCleanupTimer() {
 					// Log the panic and restart the cleanup goroutine
 					// Note: We can't use a logger here as it's not available in this context
 					// In a production system, you'd want to inject a logger
-					
+
 					// Restart the cleanup goroutine after a brief delay to prevent tight loops
 					time.Sleep(time.Second)
 					c.cleanupStarted = sync.Once{} // Reset the Once to allow restart
 					c.startCleanupTimer()
 				}
 			}()
-			
+
 			for {
 				select {
 				case <-ticker.C:
