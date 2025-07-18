@@ -74,9 +74,38 @@ func TileToLatLon(x, y, zoom int) (lat, lon float64) {
 	return lat, lon
 }
 
+// validateTileCoordinates validates tile coordinates to prevent DoS attacks
+func validateTileCoordinates(x, y, zoom int) error {
+	// Validate zoom level (standard tile servers support 0-18, allow up to 20 for flexibility)
+	if zoom < 0 || zoom > 20 {
+		return fmt.Errorf("zoom level %d out of valid range [0, 20]", zoom)
+	}
+
+	// Calculate maximum valid tile coordinates for this zoom level
+	maxTile := 1 << zoom // 2^zoom
+
+	// Validate x coordinate
+	if x < 0 || x >= maxTile {
+		return fmt.Errorf("x coordinate %d out of valid range [0, %d) for zoom %d", x, maxTile, zoom)
+	}
+
+	// Validate y coordinate
+	if y < 0 || y >= maxTile {
+		return fmt.Errorf("y coordinate %d out of valid range [0, %d) for zoom %d", y, maxTile, zoom)
+	}
+
+	return nil
+}
+
 // FetchMapTile retrieves a map tile with caching and resource management
 func FetchMapTile(ctx context.Context, x, y, zoom int) ([]byte, error) {
 	logger := slog.Default().With("service", "tile_fetcher")
+
+	// Validate tile coordinates to prevent DoS attacks
+	if err := validateTileCoordinates(x, y, zoom); err != nil {
+		logger.Warn("invalid tile coordinates", "x", x, "y", y, "zoom", zoom, "error", err)
+		return nil, NewError(ErrInvalidParameter, fmt.Sprintf("Invalid tile coordinates: %v", err))
+	}
 
 	// Initialize cache if needed
 	InitTileCache()
