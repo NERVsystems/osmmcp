@@ -397,9 +397,9 @@ func (t *HTTPTransport) writeJSONRPCError(w http.ResponseWriter, id interface{},
 // Start begins serving HTTP requests
 func (t *HTTPTransport) Start() error {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-
+	
 	if t.httpSrv != nil {
+		t.mu.Unlock()
 		return core.NewError(core.ErrInternalError, "HTTP transport already started").
 			WithGuidance("The HTTP transport is already running. Stop it before starting again.")
 	}
@@ -423,6 +423,7 @@ func (t *HTTPTransport) Start() error {
 			"tls_enabled", true,
 			"force_https", t.config.ForceHTTPS)
 
+		t.mu.Unlock() // Release lock before blocking call
 		return t.httpSrv.ListenAndServeTLS(t.config.TLSCertFile, t.config.TLSKeyFile)
 	}
 
@@ -439,6 +440,7 @@ func (t *HTTPTransport) Start() error {
 		t.logger.Warn("HTTPS enforcement enabled but no TLS certificates provided - HTTP requests will be redirected")
 	}
 
+	t.mu.Unlock() // Release lock before blocking call
 	return t.httpSrv.ListenAndServe()
 }
 

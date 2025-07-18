@@ -50,8 +50,8 @@ func TestHTTPTransport_ServiceDiscovery(t *testing.T) {
 	}
 
 	// Verify service discovery structure
-	if discovery["service"] != "osm-mcp-server" {
-		t.Errorf("Expected service 'osm-mcp-server', got %v", discovery["service"])
+	if discovery["service"] != "mcp-server" {
+		t.Errorf("Expected service 'mcp-server', got %v", discovery["service"])
 	}
 
 	if discovery["transport"] != "HTTP+SSE" {
