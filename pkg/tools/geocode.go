@@ -40,6 +40,10 @@ const (
 	// Retry configuration
 	maxRetries     = 3                      // Maximum number of retries for failed requests
 	initialBackoff = 500 * time.Millisecond // Initial backoff delay
+
+	// Input validation limits
+	maxAddressLength = 1000 // Maximum length of address input
+	maxRegionLength  = 100  // Maximum length of region input
 )
 
 // Default region to append for single-token or landmark queries
@@ -152,12 +156,32 @@ func GeocodeAddressTool() mcp.Tool {
 // sanitizeAddress cleans the address query for better geocoding results
 // and returns both with and without parentheses versions
 func sanitizeAddress(address string) (string, string) {
+	// Validate input length
+	if len(address) > maxAddressLength {
+		address = address[:maxAddressLength]
+	}
+
 	// Remove extra whitespace
 	address = strings.TrimSpace(address)
+
+	// Remove control characters and potentially dangerous characters
+	address = strings.Map(func(r rune) rune {
+		// Allow printable ASCII, common Unicode characters, but exclude control chars
+		if r < 32 || r == 127 { // Control characters
+			return ' '
+		}
+		// Keep normal characters
+		return r
+	}, address)
 
 	// Replace multiple spaces with a single space
 	re := regexp.MustCompile(`\s+`)
 	address = re.ReplaceAllString(address, " ")
+
+	// Validate that we still have content after sanitization
+	if strings.TrimSpace(address) == "" {
+		return "", ""
+	}
 
 	// Extract content inside parentheses
 	reParens := regexp.MustCompile(`\(([^)]*)\)`)

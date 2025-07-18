@@ -17,6 +17,55 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+const (
+	// Input validation limits to prevent DoS attacks
+	maxTagCount       = 20  // Maximum number of tags per query
+	maxTagKeyLength   = 100 // Maximum length of tag keys
+	maxTagValueLength = 200 // Maximum length of tag values
+)
+
+// validateTags validates tag input to prevent DoS attacks and injection
+func validateTags(tags map[string]string) error {
+	// Check tag count limit
+	if len(tags) == 0 {
+		return fmt.Errorf("at least one tag is required")
+	}
+	if len(tags) > maxTagCount {
+		return fmt.Errorf("too many tags: %d (maximum: %d)", len(tags), maxTagCount)
+	}
+
+	// Validate each tag
+	for key, value := range tags {
+		// Validate key length
+		if len(key) == 0 {
+			return fmt.Errorf("empty tag key")
+		}
+		if len(key) > maxTagKeyLength {
+			return fmt.Errorf("tag key too long: %d characters (maximum: %d)", len(key), maxTagKeyLength)
+		}
+
+		// Validate value length
+		if len(value) > maxTagValueLength {
+			return fmt.Errorf("tag value too long: %d characters (maximum: %d)", len(value), maxTagValueLength)
+		}
+
+		// Check for potentially dangerous characters
+		if strings.ContainsAny(key, "\x00\r\n\t") {
+			return fmt.Errorf("tag key contains invalid characters")
+		}
+		if strings.ContainsAny(value, "\x00\r\n\t") {
+			return fmt.Errorf("tag value contains invalid characters")
+		}
+
+		// Additional validation for injection prevention
+		if strings.Contains(key, "..") || strings.Contains(value, "..") {
+			return fmt.Errorf("tag contains potentially unsafe sequences")
+		}
+	}
+
+	return nil
+}
+
 // OSMQueryBBoxInput defines the input parameters for querying OSM data by bounding box
 type OSMQueryBBoxInput struct {
 	BBox geo.BoundingBox   `json:"bbox"`
@@ -85,10 +134,10 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 		return ErrorResponse("Invalid bounding box. Ensure parameters use correct case (minLat, minLon, maxLat, maxLon), MinLat must be less than MaxLat, MinLon must be less than MaxLon, and coordinates must be in valid ranges."), nil
 	}
 
-	// Validate tags
-	if len(input.Tags) == 0 {
-		logger.Error("empty tags object")
-		return ErrorResponse("At least one tag is required"), nil
+	// Validate tags with comprehensive bounds checking
+	if err := validateTags(input.Tags); err != nil {
+		logger.Error("invalid tags", "error", err)
+		return ErrorResponse(fmt.Sprintf("Invalid tags: %v", err)), nil
 	}
 
 	// Build Overpass query using the query builder
