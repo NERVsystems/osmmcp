@@ -3,12 +3,19 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Registry contains all tool definitions and handlers
@@ -212,7 +219,68 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 func (r *Registry) RegisterTools(mcpServer *server.MCPServer) {
 	for _, def := range r.GetToolDefinitions() {
 		r.logger.Info("registering tool", "name", def.Name)
-		mcpServer.AddTool(def.Tool, def.Handler)
+		// Wrap handler with tracing
+		tracedHandler := r.wrapWithTracing(def.Name, def.Handler)
+		mcpServer.AddTool(def.Tool, tracedHandler)
+	}
+}
+
+// wrapWithTracing wraps a tool handler with OpenTelemetry tracing
+func (r *Registry) wrapWithTracing(toolName string, handler func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error)) func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Start span
+		spanName := fmt.Sprintf("mcp.tool.%s", toolName)
+		ctx, span := tracing.StartSpan(ctx, spanName,
+			trace.WithAttributes(
+				attribute.String(tracing.AttrMCPToolName, toolName),
+			),
+		)
+		defer span.End()
+
+		// Record start time
+		startTime := time.Now()
+
+		// Execute handler
+		result, err := handler(ctx, req)
+
+		// Calculate duration
+		duration := time.Since(startTime)
+		durationMs := duration.Milliseconds()
+
+		// Determine status
+		status := tracing.StatusSuccess
+		if err != nil {
+			status = tracing.StatusError
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+		} else {
+			span.SetStatus(codes.Ok, "")
+		}
+
+		// Calculate result size
+		resultSize := 0
+		if result != nil && result.Content != nil {
+			if data, marshalErr := json.Marshal(result.Content); marshalErr == nil {
+				resultSize = len(data)
+			}
+		}
+
+		// Set final attributes
+		span.SetAttributes(
+			attribute.String(tracing.AttrMCPToolStatus, status),
+			attribute.Int64(tracing.AttrMCPToolDuration, durationMs),
+			attribute.Int(tracing.AttrMCPResultSize, resultSize),
+		)
+
+		// Log for debugging
+		r.logger.Debug("tool execution traced",
+			"tool", toolName,
+			"duration_ms", durationMs,
+			"status", status,
+			"result_size", resultSize,
+		)
+
+		return result, err
 	}
 }
 

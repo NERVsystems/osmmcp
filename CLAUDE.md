@@ -204,3 +204,58 @@ The Prometheus metrics can be integrated with:
 - **Grafana**: For visualization and alerting
 - **Alertmanager**: For alert routing and management
 - **Kubernetes**: Health endpoints work with liveness/readiness probes
+
+### OpenTelemetry Tracing
+
+The server supports distributed tracing via OpenTelemetry (OTLP) for enhanced observability and debugging.
+
+#### Configuration
+
+Enable tracing by setting the OTLP endpoint:
+```bash
+export OTLP_ENDPOINT=localhost:4317
+./osmmcp
+```
+
+#### What's Traced
+
+**MCP Tool Execution**
+- Each tool call creates a span with tool name, duration, status, and result size
+- Errors are automatically recorded with stack traces
+
+**External Service Calls**
+- HTTP requests to Nominatim, Overpass, and OSRM
+- Retry attempts and delays
+- Rate limiting wait times
+- Response status and size
+
+**Cache Operations**
+- Cache hits/misses for OSM and tile caches
+- Cache key and type information
+- Eviction events
+
+**HTTP Transport** (when enabled)
+- All HTTP requests with method, path, status
+- Session ID correlation
+- Request/response sizes
+
+#### Integration Examples
+
+**Jaeger**
+```bash
+docker run -d --name jaeger \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  jaegertracing/all-in-one:latest
+```
+
+**Grafana Tempo**
+```bash
+docker run -d --name tempo \
+  -p 3200:3200 \
+  -p 4317:4317 \
+  grafana/tempo:latest
+```
+
+See [TRACING.md](./TRACING.md) for detailed tracing documentation.

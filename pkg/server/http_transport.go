@@ -404,9 +404,16 @@ func (t *HTTPTransport) Start() error {
 			WithGuidance("The HTTP transport is already running. Stop it before starting again.")
 	}
 
+	// Apply middleware in the correct order
+	handler := http.Handler(t.mux)
+	handler = TracingMiddleware()(handler)  // Add tracing first to capture all requests
+	handler = LoggingMiddleware(t.logger)(handler)
+	handler = SecurityHeaders(handler)
+	handler = RequestSizeLimiter(10 * 1024 * 1024)(handler) // 10MB limit
+
 	t.httpSrv = &http.Server{
 		Addr:         t.config.Addr,
-		Handler:      t.mux,
+		Handler:      handler,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,

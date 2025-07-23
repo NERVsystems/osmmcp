@@ -13,7 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"github.com/mark3labs/mcp-go/mcp"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -72,6 +74,16 @@ func NewTileResourceManager(logger *slog.Logger) *TileResourceManager {
 
 // GetTileResource retrieves a tile resource by coordinates
 func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom int) (*TileResource, error) {
+	// Start tracing span
+	ctx, span := tracing.StartSpan(ctx, "tile_cache.get_resource")
+	defer span.End()
+	
+	span.SetAttributes(
+		attribute.Int("tile.x", x),
+		attribute.Int("tile.y", y),
+		attribute.Int("tile.zoom", zoom),
+	)
+	
 	logger := trm.logger.With("x", x, "y", y, "zoom", zoom)
 
 	// Validate coordinates
@@ -91,10 +103,14 @@ func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom 
 	// Check if already cached as resource
 	if cached, found := trm.cache.Get(cacheKey); found {
 		logger.Debug("tile resource cache hit")
+		// Record cache hit
+		span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeTile, true, cacheKey)...)
 		return cached.(*TileResource), nil
 	}
 
 	logger.Debug("tile resource cache miss, creating new resource")
+	// Record cache miss
+	span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeTile, false, cacheKey)...)
 
 	// We'll need to fetch the tile data - this should be integrated with core.FetchMapTile
 	// For now, create the resource structure without data
@@ -117,6 +133,16 @@ func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom 
 
 // SetTileData updates a tile resource with actual image data
 func (trm *TileResourceManager) SetTileData(uri string, data []byte) error {
+	// Start tracing span
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "tile_cache.set_data")
+	defer span.End()
+	
+	span.SetAttributes(
+		attribute.String("tile.uri", uri),
+		attribute.Int("tile.data_size", len(data)),
+	)
+	
 	x, y, zoom, err := parseTileURI(uri)
 	if err != nil {
 		return fmt.Errorf("invalid tile URI: %w", err)
@@ -190,19 +216,34 @@ func (trm *TileResourceManager) ListTileResources() []mcp.Resource {
 
 // ReadTileResource reads a tile resource by URI
 func (trm *TileResourceManager) ReadTileResource(ctx context.Context, uri string) (*mcp.ReadResourceResult, error) {
+	// Start tracing span
+	ctx, span := tracing.StartSpan(ctx, "tile_cache.read_resource")
+	defer span.End()
+	
+	span.SetAttributes(attribute.String("tile.uri", uri))
+	
 	logger := trm.logger.With("uri", uri)
 
 	x, y, zoom, err := parseTileURI(uri)
 	if err != nil {
 		logger.Warn("invalid tile URI format", "error", err)
+		span.RecordError(err)
 		return nil, fmt.Errorf("invalid tile URI: %w", err)
 	}
+
+	span.SetAttributes(
+		attribute.Int("tile.x", x),
+		attribute.Int("tile.y", y),
+		attribute.Int("tile.zoom", zoom),
+	)
 
 	cacheKey := fmt.Sprintf("resource:%d:%d:%d", zoom, x, y)
 
 	cached, found := trm.cache.Get(cacheKey)
 	if !found {
 		logger.Debug("tile resource not found in cache")
+		// Record cache miss
+		span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeTile, false, cacheKey)...)
 		return nil, fmt.Errorf("tile resource not found: %s", uri)
 	}
 

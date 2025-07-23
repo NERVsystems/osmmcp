@@ -10,6 +10,10 @@ import (
 
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 )
 
@@ -269,4 +273,59 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.bytesWritten += int64(n)
 	return n, err
+}
+
+// TracingMiddleware adds OpenTelemetry tracing to HTTP requests
+func TracingMiddleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extract session ID from query or header for correlation
+			sessionID := r.URL.Query().Get("sessionId")
+			if sessionID == "" {
+				sessionID = r.Header.Get("X-Session-ID")
+			}
+
+			// Start tracing span
+			spanName := r.Method + " " + r.URL.Path
+			ctx, span := tracing.StartSpan(r.Context(), spanName,
+				trace.WithAttributes(
+					attribute.String(tracing.AttrHTTPMethod, r.Method),
+					attribute.String(tracing.AttrHTTPPath, r.URL.Path),
+					attribute.String("http.url", r.URL.String()),
+					attribute.String("http.host", r.Host),
+					attribute.String("http.user_agent", r.UserAgent()),
+					attribute.String("http.remote_addr", r.RemoteAddr),
+				),
+			)
+			defer span.End()
+
+			// Add session ID if present
+			if sessionID != "" {
+				span.SetAttributes(attribute.String(tracing.AttrHTTPSessionID, sessionID))
+			}
+
+			// Wrap response writer to capture status code
+			wrapped := &responseWriter{
+				ResponseWriter: w,
+				statusCode:     200,
+			}
+
+			// Process request with new context
+			r = r.WithContext(ctx)
+			next.ServeHTTP(wrapped, r)
+
+			// Set final span attributes
+			span.SetAttributes(
+				attribute.Int(tracing.AttrHTTPStatusCode, wrapped.statusCode),
+				attribute.Int64("http.response.size", wrapped.bytesWritten),
+			)
+
+			// Set span status based on HTTP status code
+			if wrapped.statusCode >= 400 {
+				span.SetStatus(codes.Error, http.StatusText(wrapped.statusCode))
+			} else {
+				span.SetStatus(codes.Ok, "")
+			}
+		})
+	}
 }

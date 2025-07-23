@@ -12,6 +12,9 @@ import (
 
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 )
 
@@ -107,17 +110,52 @@ func hostFromURL(urlStr string) string {
 // waitForRateLimit waits for the appropriate rate limiter based on the request URL
 func waitForRateLimit(ctx context.Context, req *http.Request) error {
 	host := hostFromURL(req.URL.String())
-
+	
+	var service string
+	var limiter *rate.Limiter
+	
 	switch host {
 	case hostFromURL(NominatimBaseURL):
-		return nominatimLimiter.Wait(ctx)
+		service = tracing.ServiceNominatim
+		limiter = nominatimLimiter
 	case hostFromURL(OverpassBaseURL):
-		return overpassLimiter.Wait(ctx)
+		service = tracing.ServiceOverpass
+		limiter = overpassLimiter
 	case hostFromURL(OSRMBaseURL):
-		return osrmLimiter.Wait(ctx)
+		service = tracing.ServiceOSRM
+		limiter = osrmLimiter
 	default:
 		return nil // No rate limiting for unknown hosts
 	}
+	
+	// Check if we need to wait
+	if !limiter.Allow() {
+		// Record rate limit wait in current span
+		startWait := time.Now()
+		
+		// Add event about rate limiting
+		tracing.AddEvent(ctx, "rate_limit_wait",
+			trace.WithAttributes(
+				attribute.String(tracing.AttrRateLimitService, service),
+			),
+		)
+		
+		// Wait for rate limit
+		err := limiter.Wait(ctx)
+		
+		// Record wait duration
+		waitDuration := time.Since(startWait)
+		tracing.SetAttributes(ctx,
+			attribute.String(tracing.AttrRateLimitService, service),
+			attribute.Int64(tracing.AttrRateLimitWaitMs, waitDuration.Milliseconds()),
+		)
+		
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }
 
 // DoRequest performs an HTTP request with rate limiting

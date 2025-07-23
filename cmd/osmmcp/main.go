@@ -20,6 +20,7 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/monitoring"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	ver "github.com/NERVsystems/osmmcp/pkg/version"
 )
 
@@ -97,6 +98,25 @@ func main() {
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+
+	// Initialize OpenTelemetry tracing
+	ctx := context.Background()
+	shutdownTracing, err := tracing.InitTracing(ctx, ver.BuildVersion)
+	if err != nil {
+		logger.Error("failed to initialize tracing", "error", err)
+		// Continue without tracing - it's not critical
+	} else {
+		// Ensure tracing is shut down on exit
+		defer func() {
+			if err := shutdownTracing(ctx); err != nil {
+				logger.Error("error shutting down tracing", "error", err)
+			}
+		}()
+		
+		if endpoint := os.Getenv("OTLP_ENDPOINT"); endpoint != "" {
+			logger.Info("OpenTelemetry tracing enabled", "endpoint", endpoint)
+		}
+	}
 
 	// Show version and exit if requested
 	if showVersionFlag {
