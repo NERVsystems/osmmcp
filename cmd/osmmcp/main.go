@@ -112,7 +112,7 @@ func main() {
 				logger.Error("error shutting down tracing", "error", err)
 			}
 		}()
-		
+
 		if endpoint := os.Getenv("OTLP_ENDPOINT"); endpoint != "" {
 			logger.Info("OpenTelemetry tracing enabled", "endpoint", endpoint)
 		}

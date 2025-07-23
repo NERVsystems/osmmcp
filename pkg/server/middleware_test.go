@@ -25,7 +25,7 @@ func TestTracingMiddleware(t *testing.T) {
 		if span == nil {
 			t.Error("No span in request context")
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("test response"))
 	})
@@ -52,9 +52,9 @@ func TestTracingMiddleware(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte("error"))
 		})
-		
+
 		handler := TracingMiddleware()(errorHandler)
-		
+
 		req := httptest.NewRequest("POST", "/error", nil)
 		rec := httptest.NewRecorder()
 

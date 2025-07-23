@@ -77,13 +77,13 @@ func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom 
 	// Start tracing span
 	ctx, span := tracing.StartSpan(ctx, "tile_cache.get_resource")
 	defer span.End()
-	
+
 	span.SetAttributes(
 		attribute.Int("tile.x", x),
 		attribute.Int("tile.y", y),
 		attribute.Int("tile.zoom", zoom),
 	)
-	
+
 	logger := trm.logger.With("x", x, "y", y, "zoom", zoom)
 
 	// Validate coordinates
@@ -137,12 +137,12 @@ func (trm *TileResourceManager) SetTileData(uri string, data []byte) error {
 	ctx := context.Background()
 	ctx, span := tracing.StartSpan(ctx, "tile_cache.set_data")
 	defer span.End()
-	
+
 	span.SetAttributes(
 		attribute.String("tile.uri", uri),
 		attribute.Int("tile.data_size", len(data)),
 	)
-	
+
 	x, y, zoom, err := parseTileURI(uri)
 	if err != nil {
 		return fmt.Errorf("invalid tile URI: %w", err)
@@ -219,9 +219,9 @@ func (trm *TileResourceManager) ReadTileResource(ctx context.Context, uri string
 	// Start tracing span
 	ctx, span := tracing.StartSpan(ctx, "tile_cache.read_resource")
 	defer span.End()
-	
+
 	span.SetAttributes(attribute.String("tile.uri", uri))
-	
+
 	logger := trm.logger.With("uri", uri)
 
 	x, y, zoom, err := parseTileURI(uri)

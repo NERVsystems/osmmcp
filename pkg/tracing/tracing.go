@@ -74,7 +74,7 @@ func InitTracing(ctx context.Context, version string) (shutdown func(context.Con
 
 	// Set global tracer provider
 	otel.SetTracerProvider(tp)
-	
+
 	// Set global propagator
 	otel.SetTextMapPropagator(propagation.TraceContext{})
 

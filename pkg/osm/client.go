@@ -110,10 +110,10 @@ func hostFromURL(urlStr string) string {
 // waitForRateLimit waits for the appropriate rate limiter based on the request URL
 func waitForRateLimit(ctx context.Context, req *http.Request) error {
 	host := hostFromURL(req.URL.String())
-	
+
 	var service string
 	var limiter *rate.Limiter
-	
+
 	switch host {
 	case hostFromURL(NominatimBaseURL):
 		service = tracing.ServiceNominatim
@@ -127,34 +127,34 @@ func waitForRateLimit(ctx context.Context, req *http.Request) error {
 	default:
 		return nil // No rate limiting for unknown hosts
 	}
-	
+
 	// Check if we need to wait
 	if !limiter.Allow() {
 		// Record rate limit wait in current span
 		startWait := time.Now()
-		
+
 		// Add event about rate limiting
 		tracing.AddEvent(ctx, "rate_limit_wait",
 			trace.WithAttributes(
 				attribute.String(tracing.AttrRateLimitService, service),
 			),
 		)
-		
+
 		// Wait for rate limit
 		err := limiter.Wait(ctx)
-		
+
 		// Record wait duration
 		waitDuration := time.Since(startWait)
 		tracing.SetAttributes(ctx,
 			attribute.String(tracing.AttrRateLimitService, service),
 			attribute.Int64(tracing.AttrRateLimitWaitMs, waitDuration.Milliseconds()),
 		)
-		
+
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 

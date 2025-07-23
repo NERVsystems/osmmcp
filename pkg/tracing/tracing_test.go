@@ -38,7 +38,7 @@ func TestInitTracing_NoEndpoint(t *testing.T) {
 	if span == nil {
 		t.Fatal("StartSpan returned nil span")
 	}
-	
+
 	// These should not panic
 	span.SetAttributes(attribute.String("test", "value"))
 	span.RecordError(nil)

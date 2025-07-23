@@ -15,22 +15,22 @@ const (
 	AttrServiceOperation = "osm.service.operation"
 	AttrServiceURL       = "osm.service.url"
 	AttrServiceStatus    = "osm.service.status"
-	
+
 	// Cache attributes
 	AttrCacheType = "osm.cache.type"
 	AttrCacheHit  = "osm.cache.hit"
 	AttrCacheKey  = "osm.cache.key"
-	
+
 	// Rate limiting attributes
 	AttrRateLimitService = "osm.ratelimit.service"
 	AttrRateLimitWaitMs  = "osm.ratelimit.wait_ms"
-	
+
 	// HTTP transport attributes
 	AttrHTTPMethod     = "http.method"
 	AttrHTTPStatusCode = "http.status_code"
 	AttrHTTPPath       = "http.path"
 	AttrHTTPSessionID  = "http.session_id"
-	
+
 	// Error attributes
 	AttrErrorType    = "error.type"
 	AttrErrorMessage = "error.message"
@@ -38,9 +38,9 @@ const (
 
 // Status values
 const (
-	StatusSuccess = "success"
-	StatusError   = "error"
-	StatusTimeout = "timeout"
+	StatusSuccess     = "success"
+	StatusError       = "error"
+	StatusTimeout     = "timeout"
 	StatusRateLimited = "rate_limited"
 )
 

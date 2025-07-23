@@ -406,7 +406,7 @@ func (t *HTTPTransport) Start() error {
 
 	// Apply middleware in the correct order
 	handler := http.Handler(t.mux)
-	handler = TracingMiddleware()(handler)  // Add tracing first to capture all requests
+	handler = TracingMiddleware()(handler) // Add tracing first to capture all requests
 	handler = LoggingMiddleware(t.logger)(handler)
 	handler = SecurityHeaders(handler)
 	handler = RequestSizeLimiter(10 * 1024 * 1024)(handler) // 10MB limit

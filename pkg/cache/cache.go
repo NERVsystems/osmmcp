@@ -62,13 +62,13 @@ func (c *TTLCache) Set(key string, value interface{}) {
 	ctx := context.Background()
 	ctx, span := tracing.StartSpan(ctx, "cache.set")
 	defer span.End()
-	
+
 	span.SetAttributes(
 		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
 		attribute.String(tracing.AttrCacheKey, key),
 		attribute.Int64("cache.ttl_ms", c.defaultTTL.Milliseconds()),
 	)
-	
+
 	c.SetWithTTL(key, value, c.defaultTTL)
 }
 
@@ -78,7 +78,7 @@ func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) 
 	ctx := context.Background()
 	ctx, span := tracing.StartSpan(ctx, "cache.set_with_ttl")
 	defer span.End()
-	
+
 	var expiration int64
 
 	if ttl > 0 {
@@ -92,7 +92,7 @@ func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) 
 		Value:      value,
 		Expiration: expiration,
 	}
-	
+
 	// Set tracing attributes
 	span.SetAttributes(
 		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
@@ -148,12 +148,12 @@ func (c *TTLCache) Delete(key string) {
 	ctx := context.Background()
 	ctx, span := tracing.StartSpan(ctx, "cache.delete")
 	defer span.End()
-	
+
 	span.SetAttributes(
 		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
 		attribute.String(tracing.AttrCacheKey, key),
 	)
-	
+
 	c.mu.Lock()
 	delete(c.items, key)
 	c.mu.Unlock()
@@ -173,12 +173,12 @@ func (c *TTLCache) Clear() {
 	ctx := context.Background()
 	ctx, span := tracing.StartSpan(ctx, "cache.clear")
 	defer span.End()
-	
+
 	c.mu.Lock()
 	itemsCount := len(c.items)
 	c.items = make(map[string]Item)
 	c.mu.Unlock()
-	
+
 	span.SetAttributes(
 		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
 		attribute.Int("cache.items_cleared", itemsCount),

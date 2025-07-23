@@ -130,7 +130,7 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 				attribute.Int("http.retry.attempts", attempt+1),
 			)
 			span.SetStatus(codes.Ok, "")
-			
+
 			logger.Debug("request successful",
 				"status", resp.StatusCode,
 				"content_length", resp.ContentLength,
