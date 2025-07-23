@@ -90,7 +90,7 @@ type OSMQueryBBoxOutput struct {
 // OSMQueryBBoxTool returns a tool definition for querying OSM data by bounding box
 func OSMQueryBBoxTool() mcp.Tool {
 	return mcp.NewTool("osm_query_bbox",
-		mcp.WithDescription("Query OpenStreetMap data within a bounding box with tag filters. Example usage: bbox: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}, tags: {\"amenity\": \"restaurant\", \"cuisine\": \"*\"}"),
+		mcp.WithDescription("Query OpenStreetMap data within a bounding box with tag filters. Requirements: (1) Use exact field names: minLat, minLon, maxLat, maxLon (case-sensitive), (2) Latitude range: -90 to 90, (3) Longitude range: -180 to 180, (4) minLat < maxLat, (5) minLon < maxLon. Example usage: bbox: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}, tags: {\"amenity\": \"restaurant\", \"cuisine\": \"*\"}"),
 		mcp.WithObject("bbox",
 			mcp.Required(),
 			mcp.Description("Bounding box object with required fields: minLat (number), minLon (number), maxLat (number), maxLon (number). Example: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}"),
