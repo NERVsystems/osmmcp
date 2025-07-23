@@ -96,15 +96,15 @@ func TestParentProcessMonitoring(t *testing.T) {
 	// Test the monitoring function directly without running the full server
 	go func() {
 		defer close(monitoringStarted)
-		
+
 		ppid := os.Getppid()
 		s.logger.Debug("testing parent process monitor", "ppid", ppid)
-		
+
 		// Verify the process monitoring logic works
 		if !isProcessRunning(ppid) {
 			t.Errorf("Parent process %d should be running during test", ppid)
 		}
-		
+
 		// Test with an invalid PID
 		if isProcessRunning(999999) {
 			t.Error("Invalid PID should not be detected as running")
@@ -179,7 +179,7 @@ func TestParentProcessMonitoringIntegration(t *testing.T) {
 
 	// Test the monitoring setup without running the blocking server
 	monitoringSetup := make(chan struct{})
-	
+
 	// Start the context goroutine (which would start monitoring)
 	s.ctxGoroutine.Do(func() {
 		derived, cancelDerived := context.WithCancel(ctx)
@@ -198,12 +198,12 @@ func TestParentProcessMonitoringIntegration(t *testing.T) {
 		go func() {
 			ppid := os.Getppid()
 			s.logger.Debug("integration test: parent process monitor setup", "ppid", ppid)
-			
+
 			// Verify process monitoring works
 			if !isProcessRunning(ppid) {
 				t.Errorf("Parent process %d should be running during integration test", ppid)
 			}
-			
+
 			close(monitoringSetup)
 		}()
 	})
