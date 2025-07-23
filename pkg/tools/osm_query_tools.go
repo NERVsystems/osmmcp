@@ -90,14 +90,14 @@ type OSMQueryBBoxOutput struct {
 // OSMQueryBBoxTool returns a tool definition for querying OSM data by bounding box
 func OSMQueryBBoxTool() mcp.Tool {
 	return mcp.NewTool("osm_query_bbox",
-		mcp.WithDescription("Query OpenStreetMap data within a bounding box with tag filters"),
+		mcp.WithDescription("Query OpenStreetMap data within a bounding box with tag filters. Example usage: bbox: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}, tags: {\"amenity\": \"restaurant\", \"cuisine\": \"*\"}"),
 		mcp.WithObject("bbox",
 			mcp.Required(),
-			mcp.Description("Bounding box defined by minLat, minLon, maxLat, maxLon"),
+			mcp.Description("Bounding box object with required fields: minLat (number), minLon (number), maxLat (number), maxLon (number). Example: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}"),
 		),
 		mcp.WithObject("tags",
 			mcp.Required(),
-			mcp.Description("Tags to filter by, as key-value pairs. Use '*' as value to match any value for a key."),
+			mcp.Description("Tags to filter by as key-value string pairs. Use '*' as value to match any value for a key. Example: {\"amenity\": \"restaurant\", \"cuisine\": \"*\", \"name\": \"Pizza\"}. Common keys: amenity, shop, leisure, highway, building, name, cuisine, brand"),
 		),
 	)
 }
@@ -111,12 +111,12 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 	inputJSON, err := json.Marshal(req.Params.Arguments)
 	if err != nil {
 		logger.Error("failed to marshal input", "error", err)
-		return ErrorResponse("Invalid input format"), nil
+		return ErrorResponse(fmt.Sprintf("Failed to process input arguments: %v. Expected bbox object with minLat, minLon, maxLat, maxLon fields and tags object with key-value pairs.", err)), nil
 	}
 
 	if err := json.Unmarshal(inputJSON, &input); err != nil {
 		logger.Error("failed to parse input", "error", err)
-		return ErrorResponse("Invalid input format"), nil
+		return ErrorResponse(fmt.Sprintf("Invalid input format. Expected bbox object with minLat, minLon, maxLat, maxLon fields and tags object with key-value pairs. Error: %v. Example: {\"bbox\": {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}, \"tags\": {\"amenity\": \"restaurant\"}}", err)), nil
 	}
 
 	// Validate bounding box
@@ -131,7 +131,7 @@ func HandleOSMQueryBBox(ctx context.Context, req mcp.CallToolRequest) (*mcp.Call
 			"minLon", input.BBox.MinLon,
 			"maxLat", input.BBox.MaxLat,
 			"maxLon", input.BBox.MaxLon)
-		return ErrorResponse("Invalid bounding box. Ensure parameters use correct case (minLat, minLon, maxLat, maxLon), MinLat must be less than MaxLat, MinLon must be less than MaxLon, and coordinates must be in valid ranges."), nil
+		return ErrorResponse(fmt.Sprintf("Invalid bounding box: minLat=%.6f, minLon=%.6f, maxLat=%.6f, maxLon=%.6f. Requirements: (1) Use exact field names: minLat, minLon, maxLat, maxLon (case-sensitive), (2) Latitude range: -90 to 90, (3) Longitude range: -180 to 180, (4) minLat < maxLat, (5) minLon < maxLon. Example: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}", input.BBox.MinLat, input.BBox.MinLon, input.BBox.MaxLat, input.BBox.MaxLon)), nil
 	}
 
 	// Validate tags with comprehensive bounds checking

@@ -179,7 +179,7 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 		// OSM query tools
 		{
 			Name:        "osm_query_bbox",
-			Description: "Query OpenStreetMap data within a bounding box. Parameters: bbox (object with minLat, minLon, maxLat, maxLon), tags (object)",
+			Description: "Query OpenStreetMap data within a bounding box with tag filters. Parameters: bbox (object with minLat, minLon, maxLat, maxLon), tags (object with key-value string pairs, use '*' for wildcards). Example: bbox: {\"minLat\": 37.77, \"minLon\": -122.42, \"maxLat\": 37.78, \"maxLon\": -122.41}, tags: {\"amenity\": \"restaurant\", \"cuisine\": \"*\"}",
 			Tool:        OSMQueryBBoxTool(),
 			Handler:     HandleOSMQueryBBox,
 		},
