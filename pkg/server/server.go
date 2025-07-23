@@ -6,7 +6,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/NERVsystems/osmmcp/pkg/core"
@@ -102,7 +104,9 @@ func (s *Server) Run() error {
 		defer close(s.doneCh)
 		err := mcpserver.ServeStdio(s.srv)
 		if err != nil && err != io.EOF {
-			s.logger.Error("server error", "error", err)
+			s.logger.Error("MCP server error", "error", err)
+		} else if err == io.EOF {
+			s.logger.Info("stdin closed, shutting down server gracefully")
 		}
 
 		// Ensure the main Run loop is notified that the
@@ -139,6 +143,10 @@ func (s *Server) RunWithContext(ctx context.Context) error {
 				// Already being shut down
 			}
 		}()
+
+		// Start parent process monitoring as a fallback for stdio transport
+		// This ensures the server shuts down if the parent process exits unexpectedly
+		go s.monitorParentProcess()
 	})
 
 	return s.Run()
@@ -417,4 +425,51 @@ func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) (int, erro
 // generateRequestID generates a unique request ID
 func generateRequestID() string {
 	return time.Now().Format("20060102150405.000000000")
+}
+
+// monitorParentProcess monitors the parent process and shuts down the server
+// when the parent process exits. This serves as a fallback mechanism in case
+// stdin EOF detection fails. The primary shutdown mechanism should be EOF on stdin.
+func (s *Server) monitorParentProcess() {
+	ppid := os.Getppid()
+	s.logger.Debug("starting parent process monitor as fallback", "ppid", ppid)
+
+	// Check parent process every 30 seconds (less aggressive than primary EOF detection)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			// Server is already shutting down
+			return
+		case <-ticker.C:
+			// Check if parent process still exists
+			if !isProcessRunning(ppid) {
+				s.logger.Info("parent process has exited (fallback detection), shutting down server", "ppid", ppid)
+				s.Shutdown()
+				return
+			}
+		}
+	}
+}
+
+// isProcessRunning checks if a process with the given PID is still running
+func isProcessRunning(pid int) bool {
+	// On Unix systems, sending signal 0 to a process checks if it exists
+	// without actually sending a signal
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+
+	// Send signal 0 (syscall.Signal(0)) to check if process exists
+	// This is a Unix convention - signal 0 checks process existence without sending a real signal
+	err = process.Signal(syscall.Signal(0))
+	if err != nil {
+		// Process doesn't exist or we don't have permission
+		return false
+	}
+
+	return true
 }
