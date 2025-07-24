@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"net"
 	"net/http"
@@ -217,7 +218,7 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 
 			// Wrap ResponseWriter to capture status code
-			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			wrapped := newResponseWriter(w)
 
 			// Add request ID to context
 			reqID := r.Header.Get("X-Request-ID")
@@ -251,11 +252,20 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 }
 
 // responseWriter wraps http.ResponseWriter to capture status code and bytes written
+// It also preserves the optional interfaces that the underlying ResponseWriter might implement
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode    int
 	bytesWritten  int64
 	headerWritten bool
+}
+
+// newResponseWriter creates a new responseWriter that preserves optional interfaces
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+	}
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -273,6 +283,29 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	n, err := rw.ResponseWriter.Write(b)
 	rw.bytesWritten += int64(n)
 	return n, err
+}
+
+// Flush implements the http.Flusher interface
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// Hijack implements the http.Hijacker interface
+func (rw *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := rw.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, http.ErrNotSupported
+}
+
+// Push implements the http.Pusher interface (HTTP/2 Server Push)
+func (rw *responseWriter) Push(target string, opts *http.PushOptions) error {
+	if p, ok := rw.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }
 
 // TracingMiddleware adds OpenTelemetry tracing to HTTP requests
@@ -305,10 +338,7 @@ func TracingMiddleware() func(http.Handler) http.Handler {
 			}
 
 			// Wrap response writer to capture status code
-			wrapped := &responseWriter{
-				ResponseWriter: w,
-				statusCode:     200,
-			}
+			wrapped := newResponseWriter(w)
 
 			// Process request with new context
 			r = r.WithContext(ctx)
