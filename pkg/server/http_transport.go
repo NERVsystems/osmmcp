@@ -419,6 +419,14 @@ func (t *HTTPTransport) Start() error {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Validate ForceHTTPS configuration - TLS certificates must be provided
+	if t.config.ForceHTTPS && (t.config.TLSCertFile == "" || t.config.TLSKeyFile == "") {
+		t.mu.Unlock()
+		return core.NewError(core.ErrInvalidParameter,
+			"ForceHTTPS requires TLSCertFile and TLSKeyFile").
+			WithGuidance("Provide TLS certificates or disable ForceHTTPS")
+	}
+
 	// Check if TLS is configured
 	if t.config.TLSCertFile != "" && t.config.TLSKeyFile != "" {
 		t.logger.Info("starting HTTPS transport",
