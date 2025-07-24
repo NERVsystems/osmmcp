@@ -25,10 +25,10 @@ func TestResponseWriterInterfaces(t *testing.T) {
 
 	// Test Flusher interface
 	var _ http.Flusher = wrapped // Compile-time check
-	
+
 	// Test Hijacker interface
 	var _ http.Hijacker = wrapped // Compile-time check
-	
+
 	// Test Pusher interface
 	var _ http.Pusher = wrapped // Compile-time check
 
@@ -326,7 +326,7 @@ func TestSSEStreamingData(t *testing.T) {
 	// Parse SSE events
 	reader := bufio.NewReader(resp.Body)
 	events := make([]string, 0)
-	
+
 	// Read a few events with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -502,7 +502,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-		
+
 		// Try to flush
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
