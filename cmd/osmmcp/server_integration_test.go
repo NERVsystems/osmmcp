@@ -41,7 +41,6 @@ func TestServerMainHealth(t *testing.T) {
 	binDir := t.TempDir()
 	binPath := filepath.Join(binDir, "osmmcp-test")
 	buildCmd := exec.Command("go", "build", "-o", binPath, ".")
-	buildCmd.Dir = "./cmd/osmmcp"
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("build failed: %v\n%s", err, out)
 	}
