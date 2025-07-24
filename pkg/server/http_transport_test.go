@@ -435,3 +435,29 @@ func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 		}
 	})
 }
+
+func TestHTTPTransport_ForceHTTPSWithoutTLS(t *testing.T) {
+	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
+	config := DefaultHTTPTransportConfig()
+	config.Addr = ":0"
+	config.ForceHTTPS = true
+	config.TLSCertFile = ""
+	config.TLSKeyFile = ""
+
+	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- transport.Start()
+	}()
+
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Error("expected error when ForceHTTPS is enabled without TLS certificates")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Error("expected error but Start did not return in time")
+		transport.Shutdown(context.Background())
+	}
+}
