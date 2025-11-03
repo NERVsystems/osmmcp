@@ -61,6 +61,9 @@ func init() {
 	flag.BoolVar(&mergeOnly, "merge-only", false, "Only merge new config, don't overwrite existing")
 
 	// HTTP transport flags
+	// TODO(NERV-MCP-STANDARD): This --enable-http flag is the standardized approach across all
+	// NERV Systems MCP servers. Other servers (takmcp, aismcp, qgismcp) should adopt this pattern.
+	// See MCP_SERVER_AUDIT.md for details.
 	flag.BoolVar(&enableHTTP, "enable-http", false, "Enable HTTP+SSE transport (in addition to stdio)")
 	flag.StringVar(&httpAddr, "http-addr", ":7082", "HTTP server address")
 	flag.StringVar(&httpBaseURL, "http-base-url", "", "Base URL for HTTP transport (auto-detected if empty)")
