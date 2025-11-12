@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -326,6 +327,7 @@ func TestSSEStreamingData(t *testing.T) {
 	// Parse SSE events
 	reader := bufio.NewReader(resp.Body)
 	events := make([]string, 0)
+	var eventsMu sync.Mutex
 
 	// Read a few events with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -342,7 +344,9 @@ func TestSSEStreamingData(t *testing.T) {
 					return
 				}
 				if strings.HasPrefix(line, "event:") || strings.HasPrefix(line, "data:") {
+					eventsMu.Lock()
 					events = append(events, strings.TrimSpace(line))
+					eventsMu.Unlock()
 				}
 			}
 		}
@@ -352,12 +356,18 @@ func TestSSEStreamingData(t *testing.T) {
 	<-ctx.Done()
 
 	// Should have received some events
-	if len(events) == 0 {
+	eventsMu.Lock()
+	eventCount := len(events)
+	eventsCopy := make([]string, len(events))
+	copy(eventsCopy, events)
+	eventsMu.Unlock()
+
+	if eventCount == 0 {
 		t.Fatal("No SSE events received")
 	}
 
-	t.Logf("Received %d SSE events", len(events))
-	for i, event := range events {
+	t.Logf("Received %d SSE events", eventCount)
+	for i, event := range eventsCopy {
 		t.Logf("Event %d: %s", i, event)
 	}
 }
