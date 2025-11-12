@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -56,7 +58,7 @@ func FindParkingAreasTool() mcp.Tool {
 			mcp.DefaultBool(false),
 		),
 		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of results to return"),
+			mcp.Description("Maximum number of results to return (max 50)"),
 			mcp.DefaultNumber(10),
 		),
 	)
@@ -66,110 +68,226 @@ func FindParkingAreasTool() mcp.Tool {
 func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "find_parking_facilities")
 
-	// Parse input parameters
-	latitude := mcp.ParseFloat64(req, "latitude", 0)
-	longitude := mcp.ParseFloat64(req, "longitude", 0)
-	radius := mcp.ParseFloat64(req, "radius", 1000)
+	// Parse and validate coordinates
+	latStr := mcp.ParseString(req, "latitude", "")
+	lonStr := mcp.ParseString(req, "longitude", "")
+	radiusStr := mcp.ParseString(req, "radius", "")
 	facilityType := mcp.ParseString(req, "type", "")
-	includePrivate := mcp.ParseBoolean(req, "include_private", false)
-	limit := int(mcp.ParseFloat64(req, "limit", 10))
+	includePrivateStr := mcp.ParseString(req, "include_private", "false")
+	limitStr := mcp.ParseString(req, "limit", "")
 
-	// Basic validation
-	if latitude < -90 || latitude > 90 {
-		return ErrorResponse("Latitude must be between -90 and 90"), nil
+	if latStr == "" || lonStr == "" {
+		logger.Error("missing required coordinates", "latitude", latStr, "longitude", lonStr)
+		return NewGeocodeDetailedError(
+			"MISSING_COORDINATES",
+			"Missing required coordinates",
+			"",
+			"The find_parking_facilities tool requires both latitude and longitude parameters",
+			"Example format: {\"latitude\": 40.7128, \"longitude\": -74.0060, \"radius\": 1000}",
+		), nil
 	}
-	if longitude < -180 || longitude > 180 {
-		return ErrorResponse("Longitude must be between -180 and 180"), nil
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		logger.Error("invalid latitude", "input", latStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LATITUDE",
+			fmt.Sprintf("Invalid latitude value: %s", latStr),
+			"",
+			"Latitude must be a valid number between -90 and 90",
+			"Example: 40.7128 (numeric, no quotes)",
+		), nil
 	}
-	if radius <= 0 || radius > 5000 {
-		return ErrorResponse("Radius must be between 1 and 5000 meters"), nil
+
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		logger.Error("invalid longitude", "input", lonStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LONGITUDE",
+			fmt.Sprintf("Invalid longitude value: %s", lonStr),
+			"",
+			"Longitude must be a valid number between -180 and 180",
+			"Example: -74.0060 (numeric, no quotes)",
+		), nil
 	}
+
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		logger.Error("coordinate validation failed", "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_COORDINATES",
+			err.Error(),
+			"",
+			"Latitude must be between -90 and 90, longitude between -180 and 180",
+		), nil
+	}
+
+	var radius float64 = 1000 // Default radius
+	if radiusStr != "" {
+		radius, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil {
+			logger.Error("invalid radius", "input", radiusStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_RADIUS",
+				fmt.Sprintf("Invalid radius value: %s", radiusStr),
+				"",
+				"Radius must be a valid positive number",
+				"Example: 1000 (numeric, no quotes)",
+			), nil
+		}
+	}
+
+	if err := ValidateRadius(radius, 5000); err != nil {
+		logger.Error("radius validation failed", "radius", radius, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_RADIUS",
+			err.Error(),
+			"",
+			"Radius must be positive and less than 5000 meters",
+		), nil
+	}
+
+	// Parse include_private
+	includePrivate := false
+	if includePrivateStr != "" {
+		includePrivate = strings.ToLower(includePrivateStr) == "true"
+	}
+
+	var limit int = 10 // Default limit
+	if limitStr != "" {
+		limitFloat, err := strconv.ParseFloat(limitStr, 64)
+		if err != nil {
+			logger.Error("invalid limit", "input", limitStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_LIMIT",
+				fmt.Sprintf("Invalid limit value: %s", limitStr),
+				"",
+				"Limit must be a valid positive number",
+				"Example: 10 (numeric, no quotes)",
+			), nil
+		}
+		limit = int(limitFloat)
+	}
+
 	if limit <= 0 {
-		limit = 10 // Default limit
+		limit = 10
 	}
 	if limit > 50 {
-		limit = 50 // Max limit
+		limit = 50
 	}
 
-	// Build Overpass query for parking facilities
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("[out:json];")
+	// Build Overpass query using the fluent builder
+	queryBuilder := core.NewOverpassBuilder().
+		WithTimeout(25).
+		WithCenter(lat, lon, radius).
+		WithTag("amenity", "parking")
 
-	// Search for nodes with amenity=parking
-	queryBuilder.WriteString(fmt.Sprintf("(node(around:%f,%f,%f)[amenity=parking];", radius, latitude, longitude))
+	// Add additional type filter if specified
+	if facilityType != "" {
+		queryBuilder.WithTag("parking", facilityType)
+	}
 
-	// Search for ways (areas) with amenity=parking
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[amenity=parking];", radius, latitude, longitude))
+	// Execute the query
+	results, err := fetchParkingFacilities(ctx, queryBuilder.Build())
+	if err != nil {
+		logger.Error("failed to fetch parking facilities", "error", err)
+		return err.(*core.MCPError).ToMCPResult(), nil
+	}
 
-	// Search for relations with amenity=parking (for complex parking structures)
-	queryBuilder.WriteString(fmt.Sprintf("relation(around:%f,%f,%f)[amenity=parking];", radius, latitude, longitude))
+	// Process results
+	facilities, err := processParkingFacilities(results, lat, lon, includePrivate, facilityType)
+	if err != nil {
+		logger.Error("failed to process parking facilities", "error", err)
+		return core.NewError(core.ErrParseError, "Failed to process parking data").ToMCPResult(), nil
+	}
 
-	// Complete the query
-	queryBuilder.WriteString(");out center;")
+	// Sort facilities by distance (closest first)
+	sort.Slice(facilities, func(i, j int) bool {
+		return facilities[i].Distance < facilities[j].Distance
+	})
 
+	// Limit results
+	if len(facilities) > limit {
+		facilities = facilities[:limit]
+	}
+
+	// Create output
+	output := struct {
+		Facilities []ParkingArea `json:"facilities"`
+	}{
+		Facilities: facilities,
+	}
+
+	// Return result
+	resultBytes, err := json.Marshal(output)
+	if err != nil {
+		logger.Error("failed to marshal result", "error", err)
+		return core.NewError(core.ErrInternalError, "Failed to generate result").ToMCPResult(), nil
+	}
+
+	return mcp.NewToolResultText(string(resultBytes)), nil
+}
+
+// fetchParkingFacilities fetches parking facilities from the Overpass API
+func fetchParkingFacilities(ctx context.Context, query string) ([]osm.OverpassElement, error) {
 	// Build request
 	reqURL, err := url.Parse(osm.OverpassBaseURL)
 	if err != nil {
-		logger.Error("failed to parse URL", "error", err)
-		return ErrorResponse("Internal server error"), nil
+		return nil, core.NewError(core.ErrInternalError, "Internal server error")
 	}
 
-	// Make HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), strings.NewReader("data="+url.QueryEscape(queryBuilder.String())))
-	if err != nil {
-		logger.Error("failed to create request", "error", err)
-		return ErrorResponse("Failed to create request"), nil
+	// Create HTTP request factory for retries
+	requestFactory := func() (*http.Request, error) {
+		req, err := http.NewRequest(
+			http.MethodPost,
+			reqURL.String(),
+			strings.NewReader("data="+url.QueryEscape(query)),
+		)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("User-Agent", osm.UserAgent)
+		return req, nil
 	}
 
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", osm.UserAgent)
-
-	// Execute request
+	// Execute request with retries
 	client := osm.GetClient(ctx)
-	resp, err := client.Do(httpReq)
+	resp, err := core.WithRetryFactory(ctx, requestFactory, client, core.DefaultRetryOptions)
 	if err != nil {
-		logger.Error("failed to execute request", "error", err)
-		return ErrorResponse("Failed to communicate with OSM service"), nil
+		return nil, core.ServiceError("Overpass", http.StatusServiceUnavailable, "Failed to communicate with OSM service")
 	}
 	defer resp.Body.Close()
 
 	// Process response
 	if resp.StatusCode != http.StatusOK {
-		logger.Error("OSM service returned error", "status", resp.StatusCode)
-		return ErrorResponse(fmt.Sprintf("OSM service error: %d", resp.StatusCode)), nil
+		return nil, core.ServiceError("Overpass", resp.StatusCode, fmt.Sprintf("OSM service error: %d", resp.StatusCode))
 	}
 
 	// Parse response
 	var overpassResp struct {
-		Elements []struct {
-			ID     int     `json:"id"`
-			Type   string  `json:"type"`
-			Lat    float64 `json:"lat,omitempty"`
-			Lon    float64 `json:"lon,omitempty"`
-			Center *struct {
-				Lat float64 `json:"lat"`
-				Lon float64 `json:"lon"`
-			} `json:"center,omitempty"`
-			Tags map[string]string `json:"tags"`
-		} `json:"elements"`
+		Elements []osm.OverpassElement `json:"elements"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&overpassResp); err != nil {
-		logger.Error("failed to decode response", "error", err)
-		return ErrorResponse("Failed to parse parking facilities data"), nil
+		return nil, core.NewError(core.ErrParseError, "Failed to parse parking facilities data")
 	}
 
-	// Convert to ParkingArea objects and calculate distances
+	return overpassResp.Elements, nil
+}
+
+// processParkingFacilities processes OSM elements into parking facilities
+func processParkingFacilities(elements []osm.OverpassElement, lat, lon float64, includePrivate bool, facilityType string) ([]ParkingArea, error) {
 	facilities := make([]ParkingArea, 0)
-	for _, element := range overpassResp.Elements {
+
+	for _, element := range elements {
 		// Get coordinates (handling both nodes and ways/relations)
-		var lat, lon float64
+		var elemLat, elemLon float64
 		if element.Type == "node" {
-			lat = element.Lat
-			lon = element.Lon
+			elemLat = element.Lat
+			elemLon = element.Lon
 		} else if (element.Type == "way" || element.Type == "relation") && element.Center != nil {
-			lat = element.Center.Lat
-			lon = element.Center.Lon
+			elemLat = element.Center.Lat
+			elemLon = element.Center.Lon
 		} else {
 			continue // Skip elements without coordinates
 		}
@@ -192,8 +310,8 @@ func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (
 
 		// Calculate distance
 		distance := osm.HaversineDistance(
-			latitude, longitude,
 			lat, lon,
+			elemLat, elemLon,
 		)
 
 		// Parse capacity if available
@@ -231,8 +349,8 @@ func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (
 			ID:   fmt.Sprintf("%d", element.ID),
 			Name: name,
 			Location: Location{
-				Latitude:  lat,
-				Longitude: lon,
+				Latitude:  elemLat,
+				Longitude: elemLon,
 			},
 			Distance:   distance,
 			Type:       element.Tags["parking"],
@@ -247,29 +365,5 @@ func HandleFindParkingFacilities(ctx context.Context, req mcp.CallToolRequest) (
 		facilities = append(facilities, facility)
 	}
 
-	// Sort facilities by distance (closest first)
-	sort.Slice(facilities, func(i, j int) bool {
-		return facilities[i].Distance < facilities[j].Distance
-	})
-
-	// Limit results
-	if len(facilities) > limit {
-		facilities = facilities[:limit]
-	}
-
-	// Create output
-	output := struct {
-		Facilities []ParkingArea `json:"facilities"`
-	}{
-		Facilities: facilities,
-	}
-
-	// Return result
-	resultBytes, err := json.Marshal(output)
-	if err != nil {
-		logger.Error("failed to marshal result", "error", err)
-		return ErrorResponse("Failed to generate result"), nil
-	}
-
-	return mcp.NewToolResultText(string(resultBytes)), nil
+	return facilities, nil
 }

@@ -3,10 +3,14 @@
 package cache
 
 import (
+	"context"
 	"math"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // Item represents a cached item with expiration
@@ -31,6 +35,8 @@ type TTLCache struct {
 	cleanupInterval time.Duration
 	maxItems        int
 	stopCleanup     chan bool
+	cleanupStarted  sync.Once
+	cleanupStopped  sync.Once
 }
 
 // NewTTLCache creates a new cache with the specified TTL and cleanup interval
@@ -52,11 +58,27 @@ func NewTTLCache(defaultTTL, cleanupInterval time.Duration, maxItems int) *TTLCa
 
 // Set adds an item to the cache with the default TTL
 func (c *TTLCache) Set(key string, value interface{}) {
+	// Create context and start span for tracing
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "cache.set")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
+		attribute.String(tracing.AttrCacheKey, key),
+		attribute.Int64("cache.ttl_ms", c.defaultTTL.Milliseconds()),
+	)
+
 	c.SetWithTTL(key, value, c.defaultTTL)
 }
 
 // SetWithTTL adds an item to the cache with a specific TTL
 func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
+	// Create context and start span for tracing
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "cache.set_with_ttl")
+	defer span.End()
+
 	var expiration int64
 
 	if ttl > 0 {
@@ -71,20 +93,36 @@ func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) 
 		Expiration: expiration,
 	}
 
+	// Set tracing attributes
+	span.SetAttributes(
+		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
+		attribute.String(tracing.AttrCacheKey, key),
+		attribute.Int64("cache.ttl_ms", ttl.Milliseconds()),
+		attribute.Int("cache.items_count", len(c.items)),
+	)
+
 	// If we're over capacity, remove oldest items
 	if c.maxItems > 0 && len(c.items) > c.maxItems {
 		c.evictOldest()
+		span.SetAttributes(attribute.Bool("cache.eviction_triggered", true))
 	}
 }
 
 // Get retrieves an item from the cache
 // Returns the item and a bool indicating if the item was found
 func (c *TTLCache) Get(key string) (interface{}, bool) {
+	// Create context and start span for tracing
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "cache.get")
+	defer span.End()
+
 	c.mu.RLock()
 	item, found := c.items[key]
 	c.mu.RUnlock()
 
 	if !found {
+		// Record cache miss
+		span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeOSM, false, key)...)
 		return nil, false
 	}
 
@@ -93,14 +131,29 @@ func (c *TTLCache) Get(key string) (interface{}, bool) {
 		c.mu.Lock()
 		delete(c.items, key)
 		c.mu.Unlock()
+		// Record cache miss due to expiration
+		span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeOSM, false, key)...)
+		span.SetAttributes(attribute.Bool("cache.expired", true))
 		return nil, false
 	}
 
+	// Record cache hit
+	span.SetAttributes(tracing.CacheAttributes(tracing.CacheTypeOSM, true, key)...)
 	return item.Value, true
 }
 
 // Delete removes an item from the cache
 func (c *TTLCache) Delete(key string) {
+	// Create context and start span for tracing
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "cache.delete")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
+		attribute.String(tracing.AttrCacheKey, key),
+	)
+
 	c.mu.Lock()
 	delete(c.items, key)
 	c.mu.Unlock()
@@ -116,9 +169,20 @@ func (c *TTLCache) Count() int {
 
 // Clear removes all items from the cache
 func (c *TTLCache) Clear() {
+	// Create context and start span for tracing
+	ctx := context.Background()
+	ctx, span := tracing.StartSpan(ctx, "cache.clear")
+	defer span.End()
+
 	c.mu.Lock()
+	itemsCount := len(c.items)
 	c.items = make(map[string]Item)
 	c.mu.Unlock()
+
+	span.SetAttributes(
+		attribute.String(tracing.AttrCacheType, tracing.CacheTypeOSM),
+		attribute.Int("cache.items_cleared", itemsCount),
+	)
 }
 
 // evictOldest removes the oldest items when cache exceeds maxItems
@@ -164,18 +228,42 @@ func (c *TTLCache) startCleanupTimer() {
 		return
 	}
 
-	ticker := time.NewTicker(c.cleanupInterval)
-	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				c.deleteExpired()
-			case <-c.stopCleanup:
-				ticker.Stop()
-				return
+	c.cleanupStarted.Do(func() {
+		ticker := time.NewTicker(c.cleanupInterval)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					// Log the panic and restart the cleanup goroutine
+					// Note: We can't use a logger here as it's not available in this context
+					// In a production system, you'd want to inject a logger
+
+					// Restart the cleanup goroutine after a brief delay to prevent tight loops
+					time.Sleep(time.Second)
+					c.cleanupStarted = sync.Once{} // Reset the Once to allow restart
+					c.startCleanupTimer()
+				}
+			}()
+
+			for {
+				select {
+				case <-ticker.C:
+					// Add panic recovery around the cleanup operation
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								// Log panic but don't stop the cleanup loop
+								// The cleanup will continue on the next tick
+							}
+						}()
+						c.deleteExpired()
+					}()
+				case <-c.stopCleanup:
+					ticker.Stop()
+					return
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // deleteExpired deletes all expired items
@@ -193,13 +281,16 @@ func (c *TTLCache) deleteExpired() {
 
 // Stop stops the cleanup timer
 func (c *TTLCache) Stop() {
-	close(c.stopCleanup)
+	c.cleanupStopped.Do(func() {
+		close(c.stopCleanup)
+	})
 }
 
 // Global cache instance
 var (
 	globalCache     *TTLCache
 	globalCacheOnce sync.Once
+	globalCacheMu   sync.Mutex
 )
 
 // GetGlobalCache returns the global cache instance
@@ -209,4 +300,14 @@ func GetGlobalCache() *TTLCache {
 		globalCache = NewTTLCache(5*time.Minute, time.Minute, 1000)
 	})
 	return globalCache
+}
+
+// StopGlobalCache stops the global cache cleanup routine
+func StopGlobalCache() {
+	globalCacheMu.Lock()
+	defer globalCacheMu.Unlock()
+
+	if globalCache != nil {
+		globalCache.Stop()
+	}
 }

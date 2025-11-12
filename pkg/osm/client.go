@@ -12,6 +12,9 @@ import (
 
 	"log/slog"
 
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
 )
 
@@ -108,16 +111,51 @@ func hostFromURL(urlStr string) string {
 func waitForRateLimit(ctx context.Context, req *http.Request) error {
 	host := hostFromURL(req.URL.String())
 
+	var service string
+	var limiter *rate.Limiter
+
 	switch host {
 	case hostFromURL(NominatimBaseURL):
-		return nominatimLimiter.Wait(ctx)
+		service = tracing.ServiceNominatim
+		limiter = nominatimLimiter
 	case hostFromURL(OverpassBaseURL):
-		return overpassLimiter.Wait(ctx)
+		service = tracing.ServiceOverpass
+		limiter = overpassLimiter
 	case hostFromURL(OSRMBaseURL):
-		return osrmLimiter.Wait(ctx)
+		service = tracing.ServiceOSRM
+		limiter = osrmLimiter
 	default:
 		return nil // No rate limiting for unknown hosts
 	}
+
+	// Check if we need to wait
+	if !limiter.Allow() {
+		// Record rate limit wait in current span
+		startWait := time.Now()
+
+		// Add event about rate limiting
+		tracing.AddEvent(ctx, "rate_limit_wait",
+			trace.WithAttributes(
+				attribute.String(tracing.AttrRateLimitService, service),
+			),
+		)
+
+		// Wait for rate limit
+		err := limiter.Wait(ctx)
+
+		// Record wait duration
+		waitDuration := time.Since(startWait)
+		tracing.SetAttributes(ctx,
+			attribute.String(tracing.AttrRateLimitService, service),
+			attribute.Int64(tracing.AttrRateLimitWaitMs, waitDuration.Milliseconds()),
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // DoRequest performs an HTTP request with rate limiting
@@ -175,4 +213,80 @@ func NewOSMClient() *Client {
 // SetLogger sets the logger for the client
 func (c *Client) SetLogger(logger *slog.Logger) {
 	c.logger = logger
+}
+
+// Health check functions for external services
+// CheckNominatimHealth checks if Nominatim service is available
+func CheckNominatimHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Make a simple status request to Nominatim
+	req, err := http.NewRequestWithContext(ctx, "GET", NominatimBaseURL+"/status", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create nominatim health check request: %w", err)
+	}
+
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("nominatim health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("nominatim health check returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// CheckOverpassHealth checks if Overpass API is available
+func CheckOverpassHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Make a simple status request to Overpass
+	req, err := http.NewRequestWithContext(ctx, "GET", OverpassBaseURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create overpass health check request: %w", err)
+	}
+
+	// Add a simple query to check if the service is responsive
+	req.URL.RawQuery = "data=[out:json];out meta;"
+
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("overpass health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("overpass health check returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// CheckOSRMHealth checks if OSRM service is available
+func CheckOSRMHealth() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Make a simple status request to OSRM
+	req, err := http.NewRequestWithContext(ctx, "GET", OSRMBaseURL+"/nearest/v1/driving/0,0", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create osrm health check request: %w", err)
+	}
+
+	resp, err := DoRequest(ctx, req)
+	if err != nil {
+		return fmt.Errorf("osrm health check failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 {
+		return fmt.Errorf("osrm health check returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

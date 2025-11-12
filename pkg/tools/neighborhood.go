@@ -155,14 +155,18 @@ func HandleAnalyzeNeighborhood(ctx context.Context, req mcp.CallToolRequest) (*m
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		logger.Error("failed to execute request", "error", err)
-		return ErrorResponse("Failed to communicate with OSM service"), nil
+		return ErrorWithGuidance(NewAPIError("Overpass", http.StatusServiceUnavailable,
+			fmt.Sprintf("Failed to communicate with Overpass API: %s", err.Error()),
+			GuidanceOverpassGeneral)), nil
 	}
 	defer resp.Body.Close()
 
 	// Process response
 	if resp.StatusCode != http.StatusOK {
-		logger.Error("OSM service returned error", "status", resp.StatusCode)
-		return ErrorResponse(fmt.Sprintf("OSM service error: %d", resp.StatusCode)), nil
+		logger.Error("Overpass API returned error", "status", resp.StatusCode)
+		return ErrorWithGuidance(NewAPIError("Overpass", resp.StatusCode,
+			fmt.Sprintf("Overpass API returned status %d", resp.StatusCode),
+			"")), nil
 	}
 
 	// Parse response

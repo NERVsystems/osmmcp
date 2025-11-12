@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -67,7 +68,8 @@ func ParseArray(req mcp.CallToolRequest, paramName string) ([]interface{}, error
 	// Check if parameter exists
 	param, ok := req.Params.Arguments[paramName]
 	if !ok {
-		return nil, fmt.Errorf("parameter %s not found", paramName)
+		return nil, core.NewError(core.ErrMissingParameter, fmt.Sprintf("parameter %s not found", paramName)).
+			WithGuidance("Ensure all required parameters are provided in the request")
 	}
 
 	// Check if it's already an array
@@ -78,12 +80,14 @@ func ParseArray(req mcp.CallToolRequest, paramName string) ([]interface{}, error
 	// Try to convert from JSON
 	jsonBytes, err := json.Marshal(param)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal parameter: %v", err)
+		return nil, core.NewError(core.ErrInternalError, "failed to marshal parameter").
+			WithGuidance("The parameter could not be processed. Check the parameter format")
 	}
 
 	var result []interface{}
 	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse array: %v", err)
+		return nil, core.NewError(core.ErrParseError, "failed to parse array parameter").
+			WithGuidance("The parameter must be a valid JSON array")
 	}
 
 	return result, nil
@@ -180,7 +184,9 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 		// Process response
 		if resp.StatusCode != http.StatusOK {
 			logger.Error("routing service returned error", "status", resp.StatusCode)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 			continue
 		}
 
@@ -206,10 +212,14 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 
 		if err := json.NewDecoder(resp.Body).Decode(&osrmResp); err != nil {
 			logger.Error("failed to decode response", "error", err)
-			resp.Body.Close()
+			if err := resp.Body.Close(); err != nil {
+				logger.Warn("failed to close response body", "error", err)
+			}
 			continue
 		}
-		resp.Body.Close()
+		if err := resp.Body.Close(); err != nil {
+			logger.Warn("failed to close response body", "error", err)
+		}
 
 		// Check if any routes were found
 		if len(osrmResp.Routes) == 0 {
@@ -238,22 +248,18 @@ func HandleAnalyzeCommute(ctx context.Context, req mcp.CallToolRequest) (*mcp.Ca
 			Instructions: instructions,
 		}
 
-		// Add estimated CO2 emissions (rough estimates)
+		// Add estimated CO2 emissions
 		if mode == "car" {
-			// Average car: ~120g CO2 per km
-			option.CO2Emission = osrmRoute.Distance / 1000 * 0.120
+			option.CO2Emission = osrmRoute.Distance / 1000 * CarCO2PerKm
 		} else if mode == "transit" {
-			// Bus/train: ~50g CO2 per km (rough estimate)
-			option.CO2Emission = osrmRoute.Distance / 1000 * 0.050
+			option.CO2Emission = osrmRoute.Distance / 1000 * TransitCO2PerKm
 		}
 
-		// Add calories burned (rough estimates)
+		// Add calories burned
 		if mode == "walking" {
-			// Walking: ~5 calories per minute for average person
-			option.CaloriesBurned = (osrmRoute.Duration / 60) * 5
+			option.CaloriesBurned = (osrmRoute.Distance / 1000) * WalkingCaloriesPerKm
 		} else if mode == "cycling" {
-			// Cycling: ~8 calories per minute for average person
-			option.CaloriesBurned = (osrmRoute.Duration / 60) * 8
+			option.CaloriesBurned = (osrmRoute.Distance / 1000) * BikeCaloriesPerKm
 		}
 
 		// Generate summary

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/NERVsystems/osmmcp/pkg/osm"
@@ -63,34 +64,110 @@ func FindChargingStationsTool() mcp.Tool {
 func HandleFindChargingStations(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "find_charging_stations")
 
-	// Parse input parameters
-	latitude := mcp.ParseFloat64(req, "latitude", 0)
-	longitude := mcp.ParseFloat64(req, "longitude", 0)
-	radius := mcp.ParseFloat64(req, "radius", 5000)
-	limit := int(mcp.ParseFloat64(req, "limit", 10))
+	// Parse and validate coordinates
+	latStr := mcp.ParseString(req, "latitude", "")
+	lonStr := mcp.ParseString(req, "longitude", "")
+	radiusStr := mcp.ParseString(req, "radius", "")
+	limitStr := mcp.ParseString(req, "limit", "")
 
-	// Basic validation
-	if latitude < -90 || latitude > 90 {
-		return ErrorResponse("Latitude must be between -90 and 90"), nil
+	if latStr == "" || lonStr == "" {
+		logger.Error("missing required coordinates", "latitude", latStr, "longitude", lonStr)
+		return NewGeocodeDetailedError(
+			"MISSING_COORDINATES",
+			"Missing required coordinates",
+			"",
+			"The find_charging_stations tool requires both latitude and longitude parameters",
+			"Example format: {\"latitude\": 40.7128, \"longitude\": -74.0060, \"radius\": 1000}",
+		), nil
 	}
-	if longitude < -180 || longitude > 180 {
-		return ErrorResponse("Longitude must be between -180 and 180"), nil
+
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		logger.Error("invalid latitude", "input", latStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LATITUDE",
+			fmt.Sprintf("Invalid latitude value: %s", latStr),
+			"",
+			"Latitude must be a valid number between -90 and 90",
+			"Example: 40.7128 (numeric, no quotes)",
+		), nil
 	}
-	if radius <= 0 || radius > 10000 {
-		return ErrorResponse("Radius must be between 1 and 10000 meters"), nil
+
+	lon, err := strconv.ParseFloat(lonStr, 64)
+	if err != nil {
+		logger.Error("invalid longitude", "input", lonStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LONGITUDE",
+			fmt.Sprintf("Invalid longitude value: %s", lonStr),
+			"",
+			"Longitude must be a valid number between -180 and 180",
+			"Example: -74.0060 (numeric, no quotes)",
+		), nil
 	}
+
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		logger.Error("coordinate validation failed", "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_COORDINATES",
+			err.Error(),
+			"",
+			"Latitude must be between -90 and 90, longitude between -180 and 180",
+		), nil
+	}
+
+	var radius float64 = 1000 // Default radius
+	if radiusStr != "" {
+		radius, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil {
+			logger.Error("invalid radius", "input", radiusStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_RADIUS",
+				fmt.Sprintf("Invalid radius value: %s", radiusStr),
+				"",
+				"Radius must be a valid positive number",
+				"Example: 1000 (numeric, no quotes)",
+			), nil
+		}
+	}
+
+	if err := ValidateRadius(radius, 5000); err != nil {
+		logger.Error("radius validation failed", "radius", radius, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_RADIUS",
+			err.Error(),
+			"",
+			"Radius must be positive and less than 5000 meters",
+		), nil
+	}
+
+	var limit int = 10 // Default limit
+	if limitStr != "" {
+		limitFloat, err := strconv.ParseFloat(limitStr, 64)
+		if err != nil {
+			logger.Error("invalid limit", "input", limitStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_LIMIT",
+				fmt.Sprintf("Invalid limit value: %s", limitStr),
+				"",
+				"Limit must be a valid positive number",
+				"Example: 10 (numeric, no quotes)",
+			), nil
+		}
+		limit = int(limitFloat)
+	}
+
 	if limit <= 0 {
-		limit = 10 // Default limit
+		limit = 10
 	}
 	if limit > 50 {
-		limit = 50 // Max limit
+		limit = 50
 	}
 
 	// Build Overpass query for charging stations
 	var queryBuilder strings.Builder
 	queryBuilder.WriteString("[out:json];")
-	queryBuilder.WriteString(fmt.Sprintf("(node(around:%f,%f,%f)[amenity=charging_station];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[amenity=charging_station];", radius, latitude, longitude))
+	queryBuilder.WriteString(fmt.Sprintf("(node(around:%f,%f,%f)[amenity=charging_station];", radius, lat, lon))
+	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[amenity=charging_station];", radius, lat, lon))
 	queryBuilder.WriteString(");out body;")
 
 	// Build request
@@ -151,7 +228,7 @@ func HandleFindChargingStations(ctx context.Context, req mcp.CallToolRequest) (*
 
 		// Calculate distance
 		distance := osm.HaversineDistance(
-			latitude, longitude,
+			lat, lon,
 			element.Lat, element.Lon,
 		)
 

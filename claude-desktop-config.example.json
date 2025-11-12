@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "OSM": {
+      "args": [],
+      "command": "/path/to/osmmcp/osmmcp"
+    }
+  }
+} 

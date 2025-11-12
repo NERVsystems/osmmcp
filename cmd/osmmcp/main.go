@@ -14,17 +14,34 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/NERVsystems/osmmcp/pkg/cache"
+	"github.com/NERVsystems/osmmcp/pkg/monitoring"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/server"
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
+	ver "github.com/NERVsystems/osmmcp/pkg/version"
 )
 
 // Version information
 var (
-	version        bool
-	debug          bool
-	generateConfig string
-	userAgent      string
-	mergeOnly      bool
+	showVersionFlag bool
+	debug           bool
+	generateConfig  string
+	userAgent       string
+	mergeOnly       bool
+
+	// HTTP transport flags
+	enableHTTP    bool
+	httpAddr      string
+	httpBaseURL   string
+	httpAuthType  string
+	httpAuthToken string
+
+	// Monitoring flags
+	enableMonitoring bool
+	monitoringAddr   string
 
 	// Rate limits for each service
 	nominatimRPS   float64
@@ -33,19 +50,25 @@ var (
 	overpassBurst  int
 	osrmRPS        float64
 	osrmBurst      int
-
-	// Build information
-	buildVersion = "0.1.0"
-	buildCommit  = "unknown"
-	buildDate    = "unknown"
 )
 
 func init() {
-	flag.BoolVar(&version, "version", false, "Display version information")
+	flag.BoolVar(&showVersionFlag, "version", false, "Display version information")
 	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
 	flag.StringVar(&generateConfig, "generate-config", "", "Generate a Claude Desktop Client config file at the specified path")
 	flag.StringVar(&userAgent, "user-agent", osm.UserAgent, "User-Agent string for OSM API requests")
 	flag.BoolVar(&mergeOnly, "merge-only", false, "Only merge new config, don't overwrite existing")
+
+	// HTTP transport flags
+	flag.BoolVar(&enableHTTP, "enable-http", false, "Enable HTTP+SSE transport (in addition to stdio)")
+	flag.StringVar(&httpAddr, "http-addr", ":7082", "HTTP server address")
+	flag.StringVar(&httpBaseURL, "http-base-url", "", "Base URL for HTTP transport (auto-detected if empty)")
+	flag.StringVar(&httpAuthType, "http-auth-type", "none", "HTTP authentication type: none, bearer, basic")
+	flag.StringVar(&httpAuthToken, "http-auth-token", "", "HTTP authentication token")
+
+	// Monitoring flags
+	flag.BoolVar(&enableMonitoring, "enable-monitoring", true, "Enable Prometheus metrics and health endpoints")
+	flag.StringVar(&monitoringAddr, "monitoring-addr", ":9090", "Monitoring server address")
 
 	// Nominatim rate limits
 	flag.Float64Var(&nominatimRPS, "nominatim-rps", 1.0, "Nominatim rate limit in requests per second")
@@ -76,8 +99,27 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	// Initialize OpenTelemetry tracing
+	ctx := context.Background()
+	shutdownTracing, err := tracing.InitTracing(ctx, ver.BuildVersion)
+	if err != nil {
+		logger.Error("failed to initialize tracing", "error", err)
+		// Continue without tracing - it's not critical
+	} else {
+		// Ensure tracing is shut down on exit
+		defer func() {
+			if err := shutdownTracing(ctx); err != nil {
+				logger.Error("error shutting down tracing", "error", err)
+			}
+		}()
+
+		if endpoint := os.Getenv("OTLP_ENDPOINT"); endpoint != "" {
+			logger.Info("OpenTelemetry tracing enabled", "endpoint", endpoint)
+		}
+	}
+
 	// Show version and exit if requested
-	if version {
+	if showVersionFlag {
 		showVersion()
 		return
 	}
@@ -109,7 +151,7 @@ func main() {
 	}
 
 	logger.Info("starting OpenStreetMap MCP server",
-		"version", buildVersion,
+		"version", ver.BuildVersion,
 		"log_level", logLevel.String(),
 		"user_agent", userAgent,
 		"nominatim_rps", nominatimRPS,
@@ -117,45 +159,134 @@ func main() {
 		"overpass_rps", overpassRPS,
 		"overpass_burst", overpassBurst,
 		"osrm_rps", osrmRPS,
-		"osrm_burst", osrmBurst)
+		"osrm_burst", osrmBurst,
+		"monitoring_enabled", enableMonitoring,
+		"monitoring_addr", monitoringAddr)
+
+	// Initialize health checker
+	var healthChecker *monitoring.HealthChecker
+	if enableMonitoring {
+		healthChecker = monitoring.NewHealthChecker(monitoring.ServiceName, ver.BuildVersion)
+		defer healthChecker.Shutdown()
+
+		// Set up monitoring hooks for OSM client
+		osm.SetMonitoringHooks(&osm.MonitoringHooks{
+			OnRequest: func(service, operation string) {
+				monitoring.RecordExternalServiceRequest(service, operation, 0, false) // Start request
+			},
+			OnResponse: func(service, operation string, duration time.Duration, success bool) {
+				monitoring.RecordExternalServiceRequest(service, operation, duration, success)
+			},
+			OnRateLimit: func(service string, waitTime time.Duration) {
+				monitoring.RecordRateLimitWait(service, waitTime)
+				monitoring.RecordRateLimitExceeded(service)
+			},
+			OnError: func(service, errorType string) {
+				monitoring.RecordError(service, errorType)
+			},
+		})
+	}
+
+	// Debug print to stderr to help diagnose MCP initialization issues
+	fmt.Fprintf(os.Stderr, "DEBUG: Creating new server instance\n")
+
+	// Create a new server instance
+	s, err := server.NewServer()
+	if err != nil {
+		logger.Error("failed to create server", "error", err)
+		os.Exit(1)
+	}
+
+	fmt.Fprintf(os.Stderr, "DEBUG: Server instance created successfully\n")
+
+	// Start monitoring external services if health checker is enabled
+	if healthChecker != nil {
+		startExternalServiceMonitoring(healthChecker, logger)
+	}
 
 	// Create context for graceful shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Create server with timeout
-	srv := &http.Server{
-		Addr:         ":8080",
-		Handler:      server.NewHandler(logger),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+	// Start monitoring server if enabled (Prometheus metrics only)
+	var monitoringServer *http.Server
+	if enableMonitoring {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+
+		monitoringServer = &http.Server{
+			Addr:              monitoringAddr,
+			Handler:           mux,
+			ReadHeaderTimeout: 30 * time.Second, // Prevent Slowloris attacks
+		}
+
+		go func() {
+			logger.Info("starting Prometheus metrics server", "addr", monitoringAddr)
+			if err := monitoringServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Error("monitoring server error", "error", err)
+			}
+		}()
+
+		// Setup graceful shutdown for monitoring server
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if err := monitoringServer.Shutdown(shutdownCtx); err != nil {
+				logger.Error("failed to shutdown monitoring server", "error", err)
+			}
+		}()
 	}
 
-	// Start server in a goroutine
-	go func() {
-		logger.Info("starting server", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	// Start HTTP transport if enabled
+	var httpTransport *server.HTTPTransport
+	if enableHTTP {
+		config := server.HTTPTransportConfig{
+			Addr:        httpAddr,
+			BaseURL:     httpBaseURL,
+			AuthType:    httpAuthType,
+			AuthToken:   httpAuthToken,
+			SSEEndpoint: "/sse",
+			MsgEndpoint: "/message",
+		}
+
+		httpTransport = server.NewHTTPTransport(s.GetMCPServer(), config, logger)
+
+		// Set health checker if enabled
+		if healthChecker != nil {
+			httpTransport.SetHealthChecker(healthChecker)
+		}
+
+		// Setup graceful shutdown for HTTP transport
+		go func() {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if err := httpTransport.Shutdown(shutdownCtx); err != nil {
+				logger.Error("failed to shutdown HTTP transport", "error", err)
+			}
+		}()
+
+		// Run HTTP transport (blocking)
+		fmt.Fprintf(os.Stderr, "DEBUG: Starting HTTP+SSE transport\n")
+		if err := httpTransport.Start(); err != nil && err != http.ErrServerClosed {
+			logger.Error("HTTP transport error", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		// Run the MCP server with context (stdio transport)
+		fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server\n")
+		if err := s.RunWithContext(ctx); err != nil {
 			logger.Error("server error", "error", err)
 			os.Exit(1)
 		}
-	}()
-
-	// Wait for interrupt signal
-	<-ctx.Done()
-	logger.Info("shutting down server...")
-
-	// Create shutdown context with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("server shutdown error", "error", err)
-		os.Exit(1)
 	}
 
-	logger.Info("server stopped gracefully")
+	// Server has shut down gracefully
+	cache.StopGlobalCache()
+	logger.Info("server stopped")
 }
 
 // generateClientConfig generates a configuration file for the Claude Desktop Client
@@ -168,15 +299,15 @@ func generateClientConfig(path string, mergeOnly bool) error {
 		return fmt.Errorf("config file must have .json extension")
 	}
 
-	// Clean the path and check for path traversal attempts
+	// Clean the path and validate it's safe
 	cleanPath := filepath.Clean(path)
-	if strings.Contains(cleanPath, "..") || filepath.IsAbs(cleanPath) {
-		return fmt.Errorf("refusing to traverse outside workspace")
+	if err := validateSafePath(cleanPath); err != nil {
+		return fmt.Errorf("invalid config path: %w", err)
 	}
 
 	// Create config directory if it doesn't exist
 	configDir := filepath.Dir(cleanPath)
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil { // More restrictive permissions
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -198,7 +329,7 @@ func generateClientConfig(path string, mergeOnly bool) error {
 		},
 		"server": map[string]interface{}{
 			"host": "localhost",
-			"port": 8080,
+			"port": 7082,
 		},
 	}
 
@@ -224,7 +355,80 @@ func generateClientConfig(path string, mergeOnly bool) error {
 	return nil
 }
 
+// validateSafePath validates that a path is safe to write to within the current working directory
+func validateSafePath(path string) error {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Resolve the absolute path
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
+	}
+
+	// Check if the resolved path is within the current working directory
+	relPath, err := filepath.Rel(cwd, absPath)
+	if err != nil {
+		return fmt.Errorf("failed to determine relative path: %w", err)
+	}
+
+	// Reject paths that go outside the working directory
+	if strings.HasPrefix(relPath, "..") || strings.Contains(relPath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("path traversal detected: %s", relPath)
+	}
+
+	// Additional safety checks
+	if filepath.IsAbs(path) {
+		return fmt.Errorf("absolute paths are not allowed for security reasons")
+	}
+
+	return nil
+}
+
 // showVersion displays version information and exits
 func showVersion() {
-	fmt.Printf("osmmcp version %s (%s) built on %s\n", buildVersion, buildCommit, buildDate)
+	fmt.Println(ver.String())
+}
+
+// startExternalServiceMonitoring starts monitoring external services
+func startExternalServiceMonitoring(healthChecker *monitoring.HealthChecker, logger *slog.Logger) {
+	// Monitor Nominatim service
+	nominatimMonitor := monitoring.NewConnectionMonitor(
+		"nominatim",
+		healthChecker,
+		func() error {
+			return osm.CheckNominatimHealth()
+		},
+		30*time.Second,
+	)
+	nominatimMonitor.Start()
+
+	// Monitor Overpass service
+	overpassMonitor := monitoring.NewConnectionMonitor(
+		"overpass",
+		healthChecker,
+		func() error {
+			return osm.CheckOverpassHealth()
+		},
+		30*time.Second,
+	)
+	overpassMonitor.Start()
+
+	// Monitor OSRM service
+	osrmMonitor := monitoring.NewConnectionMonitor(
+		"osrm",
+		healthChecker,
+		func() error {
+			return osm.CheckOSRMHealth()
+		},
+		30*time.Second,
+	)
+	osrmMonitor.Start()
+
+	logger.Info("started external service monitoring",
+		"services", []string{"nominatim", "overpass", "osrm"},
+		"check_interval", "30s")
 }

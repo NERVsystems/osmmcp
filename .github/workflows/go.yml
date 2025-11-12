@@ -1,0 +1,128 @@
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+        
+    - name: Check Go module versions
+      run: |
+        echo "Checking for multiple go.mod files..."
+        find . -name go.mod -exec echo {} \; -exec cat {} \;
+        if find . -name go.mod | grep -v "^./go.mod"; then
+          echo "Warning: Multiple go.mod files found. Make sure they all use compatible Go versions."
+        fi
+
+    - name: Format check
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "The following files need formatting:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Vet
+      run: go vet ./...
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v -race ./...
+
+    - name: Test coverage
+      run: go test -v -coverprofile=coverage.out ./...
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.out
+        fail_ci_if_error: false
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+        
+    - name: Check Go module versions
+      run: |
+        echo "Checking for multiple go.mod files..."
+        find . -name go.mod -exec echo {} \; -exec cat {} \;
+        if find . -name go.mod | grep -v "^./go.mod"; then
+          echo "Warning: Multiple go.mod files found. Make sure they all use compatible Go versions."
+        fi
+
+    - name: Set build variables
+      id: vars
+      run: |
+        echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+        echo "COMMIT=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+        echo "BUILD_DATE=$(date -u +"%Y-%m-%d")" >> $GITHUB_ENV
+
+    - name: Build for all platforms
+      run: |
+        mkdir -p dist
+        GOOS=linux GOARCH=amd64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-linux-amd64 ./cmd/osmmcp
+        GOOS=linux GOARCH=arm64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-linux-arm64 ./cmd/osmmcp
+        GOOS=darwin GOARCH=amd64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-darwin-amd64 ./cmd/osmmcp
+        GOOS=darwin GOARCH=arm64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-darwin-arm64 ./cmd/osmmcp
+        GOOS=windows GOARCH=amd64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-windows-amd64.exe ./cmd/osmmcp
+        GOOS=windows GOARCH=arm64 go build -ldflags="-X main.buildVersion=$VERSION -X main.buildCommit=$COMMIT -X main.buildDate=$BUILD_DATE" -o dist/osmmcp-windows-arm64.exe ./cmd/osmmcp
+
+    - name: Package binaries
+      run: |
+        cd dist
+        tar -czvf osmmcp-linux-amd64-v$VERSION.tar.gz osmmcp-linux-amd64
+        tar -czvf osmmcp-linux-arm64-v$VERSION.tar.gz osmmcp-linux-arm64
+        tar -czvf osmmcp-darwin-amd64-v$VERSION.tar.gz osmmcp-darwin-amd64
+        tar -czvf osmmcp-darwin-arm64-v$VERSION.tar.gz osmmcp-darwin-arm64
+        zip osmmcp-windows-amd64-v$VERSION.zip osmmcp-windows-amd64.exe
+        zip osmmcp-windows-arm64-v$VERSION.zip osmmcp-windows-arm64.exe
+
+    - name: Generate checksums
+      run: |
+        cd dist
+        sha256sum osmmcp-linux-amd64-v$VERSION.tar.gz osmmcp-linux-arm64-v$VERSION.tar.gz osmmcp-darwin-amd64-v$VERSION.tar.gz osmmcp-darwin-arm64-v$VERSION.tar.gz osmmcp-windows-amd64-v$VERSION.zip osmmcp-windows-arm64-v$VERSION.zip > SHA256SUMS.txt
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          dist/osmmcp-linux-amd64-v${{ env.VERSION }}.tar.gz
+          dist/osmmcp-linux-arm64-v${{ env.VERSION }}.tar.gz
+          dist/osmmcp-darwin-amd64-v${{ env.VERSION }}.tar.gz
+          dist/osmmcp-darwin-arm64-v${{ env.VERSION }}.tar.gz
+          dist/osmmcp-windows-amd64-v${{ env.VERSION }}.zip
+          dist/osmmcp-windows-arm64-v${{ env.VERSION }}.zip
+          dist/SHA256SUMS.txt
+        generate_release_notes: true 

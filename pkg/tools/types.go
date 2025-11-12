@@ -26,7 +26,8 @@ type Place struct {
 	Address    Address  `json:"address,omitempty"`
 	Categories []string `json:"categories,omitempty"`
 	Rating     float64  `json:"rating,omitempty"`
-	Distance   float64  `json:"distance,omitempty"` // in meters
+	Distance   float64  `json:"distance,omitempty"`   // in meters
+	Importance float64  `json:"importance,omitempty"` // Nominatim importance score
 }
 
 // Route represents a path between two locations

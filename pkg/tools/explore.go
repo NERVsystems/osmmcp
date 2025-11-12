@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
+	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -27,8 +29,8 @@ func ExploreAreaTool() mcp.Tool {
 			mcp.Description("The longitude coordinate of the area's center point"),
 		),
 		mcp.WithNumber("radius",
+			mcp.Required(),
 			mcp.Description("Search radius in meters (max 5000)"),
-			mcp.DefaultNumber(1000),
 		),
 	)
 }
@@ -56,96 +58,101 @@ type NeighborhoodInfo struct {
 func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	logger := slog.Default().With("tool", "explore_area")
 
-	// Parse input parameters
-	latitude := mcp.ParseFloat64(req, "latitude", 0)
-	longitude := mcp.ParseFloat64(req, "longitude", 0)
-	radius := mcp.ParseFloat64(req, "radius", 1000)
+	// Parse and validate coordinates
+	latStr := mcp.ParseString(req, "latitude", "")
+	lonStr := mcp.ParseString(req, "longitude", "")
+	radiusStr := mcp.ParseString(req, "radius", "")
 
-	// Basic validation
-	if latitude < -90 || latitude > 90 {
-		return ErrorResponse("Latitude must be between -90 and 90"), nil
+	if latStr == "" || lonStr == "" {
+		logger.Error("missing required coordinates", "latitude", latStr, "longitude", lonStr)
+		return NewGeocodeDetailedError(
+			"MISSING_COORDINATES",
+			"Missing required coordinates",
+			"",
+			"The explore_area tool requires both latitude and longitude parameters",
+			"Example format: {\"latitude\": 40.7128, \"longitude\": -74.0060, \"radius\": 1000}",
+		), nil
 	}
-	if longitude < -180 || longitude > 180 {
-		return ErrorResponse("Longitude must be between -180 and 180"), nil
-	}
-	if radius <= 0 || radius > 5000 {
-		return ErrorResponse("Radius must be between 1 and 5000 meters"), nil
-	}
 
-	// Build Overpass query to get area information
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("[out:json];")
-
-	// Get general amenities
-	queryBuilder.WriteString(fmt.Sprintf("(node(around:%f,%f,%f)[amenity];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[shop];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[tourism];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[leisure];", radius, latitude, longitude))
-
-	// Add natural features
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[natural];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[natural];", radius, latitude, longitude))
-
-	// Add parks and public spaces
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[landuse=park];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[landuse=park];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[leisure=park];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[leisure=park];", radius, latitude, longitude))
-
-	// Add neighborhood/district information
-	queryBuilder.WriteString(fmt.Sprintf("node(around:%f,%f,%f)[place];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("way(around:%f,%f,%f)[place];", radius, latitude, longitude))
-	queryBuilder.WriteString(fmt.Sprintf("relation(around:%f,%f,%f)[place];", radius, latitude, longitude))
-
-	// Complete the query
-	queryBuilder.WriteString(");out body;")
-
-	// Build request
-	reqURL, err := url.Parse(osm.OverpassBaseURL)
+	lat, err := strconv.ParseFloat(latStr, 64)
 	if err != nil {
-		logger.Error("failed to parse URL", "error", err)
-		return ErrorResponse("Internal server error"), nil
+		logger.Error("invalid latitude", "input", latStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LATITUDE",
+			fmt.Sprintf("Invalid latitude value: %s", latStr),
+			"",
+			"Latitude must be a valid number between -90 and 90",
+			"Example: 40.7128 (numeric, no quotes)",
+		), nil
 	}
 
-	// Make HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL.String(), strings.NewReader("data="+url.QueryEscape(queryBuilder.String())))
+	lon, err := strconv.ParseFloat(lonStr, 64)
 	if err != nil {
-		logger.Error("failed to create request", "error", err)
-		return ErrorResponse("Failed to create request"), nil
+		logger.Error("invalid longitude", "input", lonStr, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_LONGITUDE",
+			fmt.Sprintf("Invalid longitude value: %s", lonStr),
+			"",
+			"Longitude must be a valid number between -180 and 180",
+			"Example: -74.0060 (numeric, no quotes)",
+		), nil
 	}
 
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", osm.UserAgent)
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		logger.Error("coordinate validation failed", "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_COORDINATES",
+			err.Error(),
+			"",
+			"Latitude must be between -90 and 90, longitude between -180 and 180",
+		), nil
+	}
 
-	// Execute request with timeout
-	client := osm.GetClient(ctx)
-	resp, err := client.Do(httpReq)
+	var radius float64 = 1000 // Default radius
+	if radiusStr != "" {
+		radius, err = strconv.ParseFloat(radiusStr, 64)
+		if err != nil {
+			logger.Error("invalid radius", "input", radiusStr, "error", err)
+			return NewGeocodeDetailedError(
+				"INVALID_RADIUS",
+				fmt.Sprintf("Invalid radius value: %s", radiusStr),
+				"",
+				"Radius must be a valid positive number",
+				"Example: 1000 (numeric, no quotes)",
+			), nil
+		}
+	}
+
+	if err := ValidateRadius(radius, 5000); err != nil {
+		logger.Error("radius validation failed", "radius", radius, "error", err)
+		return NewGeocodeDetailedError(
+			"INVALID_RADIUS",
+			err.Error(),
+			"",
+			"Radius must be positive and less than 5000 meters",
+		), nil
+	}
+
+	// Build Overpass query using the fluent builder
+	queryBuilder := core.NewOverpassBuilder().
+		WithTimeout(25).
+		WithCenter(lat, lon, radius)
+
+	// Add various amenities to search for
+	queryBuilder.WithTag("amenity", "")
+	queryBuilder.WithTag("shop", "")
+	queryBuilder.WithTag("tourism", "")
+	queryBuilder.WithTag("leisure", "")
+	queryBuilder.WithTag("natural", "")
+	queryBuilder.WithTag("landuse", "park")
+	queryBuilder.WithTag("leisure", "park")
+	queryBuilder.WithTag("place", "")
+
+	// Execute the query
+	elements, err := executeOverpassQuery(ctx, queryBuilder.Build())
 	if err != nil {
-		logger.Error("failed to execute request", "error", err)
-		return ErrorResponse("Failed to communicate with OSM service"), nil
-	}
-	defer resp.Body.Close()
-
-	// Process response
-	if resp.StatusCode != http.StatusOK {
-		logger.Error("OSM service returned error", "status", resp.StatusCode)
-		return ErrorResponse(fmt.Sprintf("OSM service error: %d", resp.StatusCode)), nil
-	}
-
-	// Parse response
-	var overpassResp struct {
-		Elements []struct {
-			ID   int               `json:"id"`
-			Type string            `json:"type"`
-			Lat  float64           `json:"lat,omitempty"`
-			Lon  float64           `json:"lon,omitempty"`
-			Tags map[string]string `json:"tags"`
-		} `json:"elements"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&overpassResp); err != nil {
-		logger.Error("failed to decode response", "error", err)
-		return ErrorResponse("Failed to parse area data"), nil
+		logger.Error("failed to execute Overpass query", "error", err)
+		return err.(*core.MCPError).ToMCPResult(), nil
 	}
 
 	// Process the data to generate area description
@@ -158,7 +165,7 @@ func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	neighborhood := NeighborhoodInfo{}
 
 	// Process all elements
-	for _, element := range overpassResp.Elements {
+	for _, element := range elements {
 		// Extract categories and count them
 		if amenity, ok := element.Tags["amenity"]; ok {
 			categories["amenity:"+amenity]++
@@ -226,12 +233,21 @@ func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 					}
 				}
 
+				var lat, lon float64
+				if element.Type == "node" {
+					lat = element.Lat
+					lon = element.Lon
+				} else if element.Center != nil {
+					lat = element.Center.Lat
+					lon = element.Center.Lon
+				}
+
 				place := Place{
 					ID:   fmt.Sprintf("%d", element.ID),
 					Name: element.Tags["name"],
 					Location: Location{
-						Latitude:  element.Lat,
-						Longitude: element.Lon,
+						Latitude:  lat,
+						Longitude: lon,
 					},
 					Categories: categories,
 				}
@@ -278,8 +294,8 @@ func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	// Create the area description
 	areaDescription := AreaDescription{
 		Center: Location{
-			Latitude:  latitude,
-			Longitude: longitude,
+			Latitude:  lat,
+			Longitude: lon,
 		},
 		Radius:      radius,
 		Categories:  categories,
@@ -304,8 +320,57 @@ func HandleExploreArea(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	resultBytes, err := json.Marshal(output)
 	if err != nil {
 		logger.Error("failed to marshal result", "error", err)
-		return ErrorResponse("Failed to generate result"), nil
+		return core.NewError(core.ErrInternalError, "Failed to generate result").ToMCPResult(), nil
 	}
 
 	return mcp.NewToolResultText(string(resultBytes)), nil
+}
+
+// executeOverpassQuery executes an Overpass API query and returns the elements
+func executeOverpassQuery(ctx context.Context, query string) ([]osm.OverpassElement, error) {
+	// Build request
+	reqURL, err := url.Parse(osm.OverpassBaseURL)
+	if err != nil {
+		return nil, core.NewError(core.ErrInternalError, "Internal server error")
+	}
+
+	// Create HTTP request factory for retries
+	requestFactory := func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(
+			ctx,
+			http.MethodPost,
+			reqURL.String(),
+			strings.NewReader("data="+url.QueryEscape(query)),
+		)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("User-Agent", osm.UserAgent)
+		return req, nil
+	}
+
+	// Execute request with retries
+	client := osm.GetClient(ctx)
+	resp, err := core.WithRetryFactory(ctx, requestFactory, client, core.DefaultRetryOptions)
+	if err != nil {
+		return nil, core.ServiceError("Overpass", http.StatusServiceUnavailable, "Failed to communicate with OSM service")
+	}
+	defer resp.Body.Close()
+
+	// Process response
+	if resp.StatusCode != http.StatusOK {
+		return nil, core.ServiceError("Overpass", resp.StatusCode, fmt.Sprintf("OSM service error: %d", resp.StatusCode))
+	}
+
+	// Parse response
+	var overpassResp struct {
+		Elements []osm.OverpassElement `json:"elements"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&overpassResp); err != nil {
+		return nil, core.NewError(core.ErrParseError, "Failed to parse area data")
+	}
+
+	return overpassResp.Elements, nil
 }

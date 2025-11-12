@@ -8,46 +8,23 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 
 ## Components
 
-### Files and Modules
+### Constants
 
-#### `client.go`
-* `NewClient()` - Returns a pre-configured HTTP client for OSM API requests
-  - Connection pooling (100 idle connections, 10 per host)
-  - 30-second timeout for requests
-  - Proper transport configuration
+* `NominatimBaseURL` - Base URL for Nominatim geocoding service
+* `OverpassBaseURL` - Base URL for Overpass API to query OSM data
+* `OSRMBaseURL` - Base URL for OSRM routing service
+* `UserAgent` - User agent string to use for API requests
+* `EarthRadius` - Earth radius in meters for distance calculations
 
-#### `util.go`
-* **Constants:**
-  - `NominatimBaseURL` - Base URL for Nominatim geocoding service
-  - `OverpassBaseURL` - Base URL for Overpass API to query OSM data
-  - `OSRMBaseURL` - Base URL for OSRM routing service
-  - `UserAgent` - User agent string for API requests (compliance with OSM policies)
-* **Data:**
-  - `CategoryMap` - Maps common category names (restaurant, park, cafe, etc.) to OSM tags
-* **Functions:**
-  - `ValidateCoordinates()` - Validates latitude and longitude ranges
+### Functions
 
-#### `ratelimit.go`
-* **Rate Limiters:**
-  - `NominatimLimiter` - 1 request/second with burst of 1 (Nominatim policy compliance)
-  - `OverpassLimiter` - 2 requests/minute with burst of 2 (Overpass API guidelines)
-  - `OSRMLimiter` - 100 requests/minute with burst of 5 (OSRM routing service)
-* **Functions:**
-  - `InitRateLimiters()` - Initialize rate limiters with custom or default settings
+* `NewClient()` - Returns a pre-configured HTTP client for OSM API requests with appropriate timeouts and connection pooling
+* `HaversineDistance()` - Calculates distances between geographic coordinates using the Haversine formula
+* `NewBoundingBox()` - Creates a new bounding box for geographic queries
+* `BoundingBox.ExtendWithPoint()` - Extends a bounding box to include a point
+* `BoundingBox.Buffer()` - Adds a buffer around a bounding box
+* `BoundingBox.String()` - Returns a formatted string representation of a bounding box for use in Overpass queries
 
-#### `polyline.go`
-* `EncodePolyline()` - Encodes coordinates to Google Polyline5 format
-* `DecodePolyline()` - Decodes Google Polyline5 format to coordinates
-* Used for efficient route geometry transmission (reduces payload size)
-
-#### `cache.go`
-* `GetCachedResponse()` - Retrieve cached API responses
-* `CacheResponse()` - Store API responses with TTL
-* Integrates with `pkg/cache` TTL cache for response caching
-
-#### `queries/templates.go`
-* Overpass query templates for various search operations
-* Pre-formatted QL queries for common use cases
 
 ## Usage
 
@@ -63,22 +40,11 @@ client := osm.NewClient()
 // Initialize rate limiters with default or custom settings
 osm.InitRateLimiters(1.0, 1, 0.033, 2, 1.67, 5)
 
-// Validate coordinates
-if err := osm.ValidateCoordinates(lat, lon); err != nil {
-    // Handle invalid coordinates
-}
-
-// Get category-specific OSM tags
-restaurantTags := osm.CategoryMap["restaurant"]
-
-// Encode/decode polylines for route geometry
-polyline := osm.EncodePolyline(coordinates)
-coords := osm.DecodePolyline(polyline)
-
-// For geographic calculations, use pkg/geo:
-// - geo.HaversineDistance() for distance calculations
-// - geo.NewBoundingBox() for bounding boxes
-// - geo.Location for coordinate representation
+// Create and use a bounding box
+bbox := osm.NewBoundingBox()
+bbox.ExtendWithPoint(lat1, lon1)
+bbox.ExtendWithPoint(lat2, lon2)
+bbox.Buffer(1000) // Add 1000 meter buffer
 ```
 
 ## Design Principles
