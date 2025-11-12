@@ -29,13 +29,16 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 ## Usage
 
 ```go
-import "github.com/NERVsystems/osmmcp/pkg/osm"
+import (
+    "github.com/NERVsystems/osmmcp/pkg/osm"
+    "github.com/NERVsystems/osmmcp/pkg/geo"
+)
 
-// Create an HTTP client
+// Create an HTTP client with connection pooling
 client := osm.NewClient()
 
-// Calculate distance between two points
-distance := osm.HaversineDistance(lat1, lon1, lat2, lon2)
+// Initialize rate limiters with default or custom settings
+osm.InitRateLimiters(1.0, 1, 0.033, 2, 1.67, 5)
 
 // Create and use a bounding box
 bbox := osm.NewBoundingBox()
@@ -48,8 +51,16 @@ bbox.Buffer(1000) // Add 1000 meter buffer
 
 The package follows these design principles:
 
-1. **Single Responsibility**: Each component has a clear, focused purpose
-2. **Reusability**: Components are designed to be reused across tools
-3. **Abstraction**: Implementation details of OSM services are hidden behind clean interfaces
-4. **Consistency**: Ensures consistent behavior across different API calls
-5. **Security**: Properly configures timeouts and connection limits 
+1. **Single Responsibility**: Each file and component has a clear, focused purpose
+2. **Reusability**: Components are designed to be reused across all 14 tools
+3. **API Compliance**: Strict adherence to OpenStreetMap API usage policies via rate limiting
+4. **Performance**: Connection pooling, response caching, and efficient polyline encoding
+5. **Security**: Properly configured timeouts, connection limits, and coordinate validation
+6. **Separation of Concerns**: OSM-specific utilities in this package, generic geographic calculations in `pkg/geo`
+
+## Related Packages
+
+* **`pkg/geo`** - Geographic types and calculations (Location, BoundingBox, HaversineDistance)
+* **`pkg/cache`** - TTL-based caching layer used for response caching
+* **`pkg/tools`** - Tool implementations that use this package's utilities
+* **`pkg/server`** - MCP server that orchestrates tool execution 
