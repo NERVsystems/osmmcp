@@ -8,54 +8,93 @@ The `osm` package contains reusable components for interacting with OpenStreetMa
 
 ## Components
 
-### Constants
+### Files and Modules
 
-* `NominatimBaseURL` - Base URL for Nominatim geocoding service
-* `OverpassBaseURL` - Base URL for Overpass API to query OSM data
-* `OSRMBaseURL` - Base URL for OSRM routing service
-* `UserAgent` - User agent string to use for API requests
-* `EarthRadius` - Earth radius in meters for distance calculations
+#### `client.go`
+* `NewClient()` - Returns a pre-configured HTTP client for OSM API requests
+  - Connection pooling (100 idle connections, 10 per host)
+  - 30-second timeout for requests
+  - Proper transport configuration
 
-### Functions
+#### `util.go`
+* **Constants:**
+  - `NominatimBaseURL` - Base URL for Nominatim geocoding service
+  - `OverpassBaseURL` - Base URL for Overpass API to query OSM data
+  - `OSRMBaseURL` - Base URL for OSRM routing service
+  - `UserAgent` - User agent string for API requests (compliance with OSM policies)
+* **Data:**
+  - `CategoryMap` - Maps common category names (restaurant, park, cafe, etc.) to OSM tags
+* **Functions:**
+  - `ValidateCoordinates()` - Validates latitude and longitude ranges
 
-* `NewClient()` - Returns a pre-configured HTTP client for OSM API requests with appropriate timeouts and connection pooling
-* `HaversineDistance()` - Calculates distances between geographic coordinates using the Haversine formula
-* `NewBoundingBox()` - Creates a new bounding box for geographic queries
-* `BoundingBox.ExtendWithPoint()` - Extends a bounding box to include a point
-* `BoundingBox.Buffer()` - Adds a buffer around a bounding box
-* `BoundingBox.String()` - Returns a formatted string representation of a bounding box for use in Overpass queries
+#### `ratelimit.go`
+* **Rate Limiters:**
+  - `NominatimLimiter` - 1 request/second with burst of 1 (Nominatim policy compliance)
+  - `OverpassLimiter` - 2 requests/minute with burst of 2 (Overpass API guidelines)
+  - `OSRMLimiter` - 100 requests/minute with burst of 5 (OSRM routing service)
+* **Functions:**
+  - `InitRateLimiters()` - Initialize rate limiters with custom or default settings
 
-### Data
+#### `polyline.go`
+* `EncodePolyline()` - Encodes coordinates to Google Polyline5 format
+* `DecodePolyline()` - Decodes Google Polyline5 format to coordinates
+* Used for efficient route geometry transmission (reduces payload size)
 
-* `CategoryMap` - Maps common category names (restaurant, park, etc.) to OSM tags
+#### `cache.go`
+* `GetCachedResponse()` - Retrieve cached API responses
+* `CacheResponse()` - Store API responses with TTL
+* Integrates with `pkg/cache` TTL cache for response caching
+
+#### `queries/templates.go`
+* Overpass query templates for various search operations
+* Pre-formatted QL queries for common use cases
 
 ## Usage
 
 ```go
-import "github.com/NERVsystems/osmmcp/pkg/osm"
+import (
+    "github.com/NERVsystems/osmmcp/pkg/osm"
+    "github.com/NERVsystems/osmmcp/pkg/geo"
+)
 
-// Create an HTTP client
+// Create an HTTP client with connection pooling
 client := osm.NewClient()
 
-// Calculate distance between two points
-distance := osm.HaversineDistance(lat1, lon1, lat2, lon2)
+// Initialize rate limiters with default or custom settings
+osm.InitRateLimiters(1.0, 1, 0.033, 2, 1.67, 5)
 
-// Create and use a bounding box
-bbox := osm.NewBoundingBox()
-bbox.ExtendWithPoint(lat1, lon1)
-bbox.ExtendWithPoint(lat2, lon2)
-bbox.Buffer(1000) // Add 1000 meter buffer
+// Validate coordinates
+if err := osm.ValidateCoordinates(lat, lon); err != nil {
+    // Handle invalid coordinates
+}
 
 // Get category-specific OSM tags
 restaurantTags := osm.CategoryMap["restaurant"]
+
+// Encode/decode polylines for route geometry
+polyline := osm.EncodePolyline(coordinates)
+coords := osm.DecodePolyline(polyline)
+
+// For geographic calculations, use pkg/geo:
+// - geo.HaversineDistance() for distance calculations
+// - geo.NewBoundingBox() for bounding boxes
+// - geo.Location for coordinate representation
 ```
 
 ## Design Principles
 
 The package follows these design principles:
 
-1. **Single Responsibility**: Each component has a clear, focused purpose
-2. **Reusability**: Components are designed to be reused across tools
-3. **Abstraction**: Implementation details of OSM services are hidden behind clean interfaces
-4. **Consistency**: Ensures consistent behavior across different API calls
-5. **Security**: Properly configures timeouts and connection limits 
+1. **Single Responsibility**: Each file and component has a clear, focused purpose
+2. **Reusability**: Components are designed to be reused across all 14 tools
+3. **API Compliance**: Strict adherence to OpenStreetMap API usage policies via rate limiting
+4. **Performance**: Connection pooling, response caching, and efficient polyline encoding
+5. **Security**: Properly configured timeouts, connection limits, and coordinate validation
+6. **Separation of Concerns**: OSM-specific utilities in this package, generic geographic calculations in `pkg/geo`
+
+## Related Packages
+
+* **`pkg/geo`** - Geographic types and calculations (Location, BoundingBox, HaversineDistance)
+* **`pkg/cache`** - TTL-based caching layer used for response caching
+* **`pkg/tools`** - Tool implementations that use this package's utilities
+* **`pkg/server`** - MCP server that orchestrates tool execution 

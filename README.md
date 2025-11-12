@@ -4,9 +4,9 @@ This is a Go implementation of the OpenStreetMap MCP server that enhances LLM ca
 
 ## Overview
 
-This is a Go OpenStreetMap MCP server.  It implemets the [Model Context Protocol](https://github.com/mark3labs/mcp-go) to enable LLMs to interact with geospatial data.
+This is a Go OpenStreetMap MCP server. It implements the [Model Context Protocol](https://github.com/mark3labs/mcp-go) to enable LLMs to interact with geospatial data.
 
-Our focus focus on precision, performance, maintainability, and ease of integration with MCP desktop clients.
+Our focus is on precision, performance, maintainability, and ease of integration with MCP desktop clients.
 
 ## Features
 
@@ -15,7 +15,7 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 * Geocoding addresses and place names to coordinates
 * Reverse geocoding coordinates to addresses
 * Finding nearby points of interest
-* Getting route directions between locations
+* Calculating routes and getting directions between locations
 * Searching for places by category within a bounding box
 * Suggesting optimal meeting points for multiple people
 * Exploring areas and getting comprehensive location information
@@ -34,7 +34,8 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 | `reverse_geocode` | Convert geographic coordinates to a human-readable address | `{"latitude": 38.8977, "longitude": -77.0365}` |
 | `find_nearby_places` | Find points of interest near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "category": "restaurant", "limit": 5}` |
 | `search_category` | Search for places by category within a rectangular area | `{"category": "cafe", "north_lat": 37.78, "south_lat": 37.77, "east_lon": -122.41, "west_lon": -122.42, "limit": 10}` |
-| `get_route_directions` | Get directions for a route between two locations | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
+| `get_route` | Calculate a route between two locations with distance and duration | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
+| `get_route_directions` | Get detailed turn-by-turn directions for a route between locations | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
 | `suggest_meeting_point` | Suggest an optimal meeting point for multiple people | `{"locations": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}], "category": "cafe", "limit": 3}` |
 | `explore_area` | Explore an area and get comprehensive information about it | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000}` |
 | `find_charging_stations` | Find electric vehicle charging stations near a location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 5000, "limit": 10}` |
@@ -62,6 +63,12 @@ The code follows software engineering best practices:
 8. **Google Polyline5 Format** - Standardized polyline encoding/decoding using Google's Polyline5 format
 9. **Precise Geospatial Calculations** - Accurate Haversine distance calculations with appropriate tolerances
 10. **Context-Aware Operations** - All operations properly handle context for cancellation and timeouts
+11. **Response Caching** - TTL-based cache (5-minute default) with automatic cleanup to reduce API calls
+12. **Rate Limiting** - Complies with OpenStreetMap API usage policies:
+    - Nominatim: 1 request/second (geocoding policy)
+    - Overpass: 2 requests/minute (API guidelines)
+    - OSRM: 100 requests/minute (routing service)
+13. **Connection Pooling** - Efficient HTTP client with 100 idle connections, 10 per host
 
 ## Usage
 
@@ -94,10 +101,11 @@ The server supports several command-line flags:
 # Generate a Claude Desktop Client configuration file
 ./osmmcp --generate-config /path/to/config.json
 
-# Customize rate limits (requests per second)
+# Customize rate limits (requests per second and burst)
+# Defaults: Nominatim=1 rps/burst 1, Overpass=2 per min/burst 2, OSRM=100 per min/burst 5
 ./osmmcp --nominatim-rps 1.0 --nominatim-burst 1
-./osmmcp --overpass-rps 1.0 --overpass-burst 1
-./osmmcp --osrm-rps 1.0 --osrm-burst 1
+./osmmcp --overpass-rps 0.033 --overpass-burst 2
+./osmmcp --osrm-rps 1.67 --osrm-burst 5
 
 # Set custom User-Agent string
 ./osmmcp --user-agent "MyApp/1.0"
@@ -174,10 +182,12 @@ No API keys are required as these are open public APIs, but the server follows u
 
 - `cmd/osmmcp` - Main application entry point
 - `pkg/server` - MCP server implementation
-- `pkg/tools` - OpenStreetMap tool implementations and tool registry
-- `pkg/osm` - Common OpenStreetMap utilities and helpers
-- `pkg/geo` - Geographic types and calculations 
-- `pkg/cache` - Caching layer for API responses
+- `pkg/tools` - OpenStreetMap tool implementations and tool registry (14 tools)
+- `pkg/osm` - OpenStreetMap API clients, rate limiting, polyline encoding, and utilities
+- `pkg/geo` - Geographic types, bounding boxes, and Haversine distance calculations
+- `pkg/cache` - TTL-based caching layer for API responses (5-minute default)
+- `pkg/testutil` - Testing utilities and helpers
+- `pkg/version` - Build metadata and version information
 
 ### Adding New Tools
 
@@ -188,17 +198,18 @@ To add a new tool:
 
 The registry-based design makes it easy to add new tools without modifying multiple files. All tool definitions are centralized in one place, making the codebase more maintainable.
 
-### Troubleshooting
+### Testing
 
-If you encounter build errors about redeclared types or functions, you might have older files from previous implementations. Check for and remove any conflicting files:
-
+Run tests with:
 ```bash
-# Check for specialized.go which might conflict with newer implementations
-rm -f pkg/tools/specialized.go pkg/tools/specialized_*.go
-
-# Check for mock.go which might contain test implementations
-rm -f pkg/tools/mock.go
+go test ./...
 ```
+
+The test suite includes:
+- Unit tests for polyline encoding/decoding
+- Server integration tests
+- Geographic calculation tests
+- Logging utility tests
 
 ## Acknowledgments
 
