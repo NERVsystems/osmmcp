@@ -143,20 +143,20 @@ var (
 
 // Service health and info structures
 type ServiceHealth struct {
-	Service     string                 `json:"service"`
-	Version     string                 `json:"version"`
-	Status      string                 `json:"status"` // "healthy", "degraded", "unhealthy"
-	Uptime      time.Duration          `json:"uptime"`
-	StartTime   time.Time              `json:"start_time"`
-	Connections map[string]ConnStatus  `json:"connections"`
-	Metrics     map[string]interface{} `json:"metrics"`
+	Service       string                 `json:"service"`
+	Version       string                 `json:"version"`
+	Status        string                 `json:"status"` // "healthy", "degraded", "unhealthy"
+	Uptime        time.Duration          `json:"uptime"`
+	UptimeSeconds int64                  `json:"uptime_seconds"`      // Uptime in seconds for spec compliance
+	StartTime     time.Time              `json:"start_time,omitempty"` // Optional field
+	Connections   map[string]ConnStatus  `json:"connections"`
+	Metrics       map[string]interface{} `json:"metrics,omitempty"` // Optional field
 }
 
 type ConnStatus struct {
-	Name    string `json:"name"`
-	Status  string `json:"status"` // "connected", "disconnected", "error"
-	Latency int64  `json:"latency_ms"`
-	Error   string `json:"error,omitempty"`
+	Status    string `json:"status"`               // "connected", "disconnected", "error"
+	Latency   int64  `json:"latency_ms,omitempty"` // Optional latency in milliseconds
+	LastError string `json:"last_error,omitempty"` // Last error message if any
 }
 
 // Helper functions for common metric updates

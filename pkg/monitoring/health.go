@@ -47,16 +47,15 @@ func (h *HealthChecker) UpdateConnection(name, status string, latencyMs int64, e
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	errStr := ""
+	lastError := ""
 	if err != nil {
-		errStr = err.Error()
+		lastError = err.Error()
 	}
 
 	h.connections[name] = &ConnStatus{
-		Name:    name,
-		Status:  status,
-		Latency: latencyMs,
-		Error:   errStr,
+		Status:    status,
+		Latency:   latencyMs,
+		LastError: lastError,
 	}
 }
 
@@ -109,13 +108,16 @@ func (h *HealthChecker) GetHealth() ServiceHealth {
 
 	versionInfo := version.Info()
 
+	uptime := time.Since(h.startTime)
+
 	return ServiceHealth{
-		Service:     h.serviceName,
-		Version:     h.version,
-		Status:      status,
-		Uptime:      time.Since(h.startTime),
-		StartTime:   h.startTime,
-		Connections: connections,
+		Service:       h.serviceName,
+		Version:       h.version,
+		Status:        status,
+		Uptime:        uptime,
+		UptimeSeconds: int64(uptime.Seconds()),
+		StartTime:     h.startTime,
+		Connections:   connections,
 		Metrics: map[string]interface{}{
 			"goroutines":           runtime.NumGoroutine(),
 			"memory_alloc_mb":      m.Alloc / 1024 / 1024,

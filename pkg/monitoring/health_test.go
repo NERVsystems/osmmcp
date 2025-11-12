@@ -45,10 +45,6 @@ func TestUpdateConnection(t *testing.T) {
 		t.Error("Connection should exist")
 	}
 
-	if conn.Name != "test-conn" {
-		t.Errorf("Expected connection name 'test-conn', got %s", conn.Name)
-	}
-
 	if conn.Status != "connected" {
 		t.Errorf("Expected status 'connected', got %s", conn.Status)
 	}
@@ -57,8 +53,8 @@ func TestUpdateConnection(t *testing.T) {
 		t.Errorf("Expected latency 100, got %d", conn.Latency)
 	}
 
-	if conn.Error != "" {
-		t.Errorf("Expected no error, got %s", conn.Error)
+	if conn.LastError != "" {
+		t.Errorf("Expected no error, got %s", conn.LastError)
 	}
 }
 
@@ -82,8 +78,8 @@ func TestUpdateConnectionWithError(t *testing.T) {
 		t.Errorf("Expected status 'error', got %s", conn.Status)
 	}
 
-	if conn.Error != "test error" {
-		t.Errorf("Expected error 'test error', got %s", conn.Error)
+	if conn.LastError != "test error" {
+		t.Errorf("Expected error 'test error', got %s", conn.LastError)
 	}
 }
 
@@ -378,8 +374,8 @@ func TestConnectionMonitorError(t *testing.T) {
 		t.Errorf("Expected status 'error', got %s", conn.Status)
 	}
 
-	if conn.Error != "test error" {
-		t.Errorf("Expected error 'test error', got %s", conn.Error)
+	if conn.LastError != "test error" {
+		t.Errorf("Expected error 'test error', got %s", conn.LastError)
 	}
 }
 

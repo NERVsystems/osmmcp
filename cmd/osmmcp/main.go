@@ -239,7 +239,7 @@ func main() {
 		}()
 	}
 
-	// Start HTTP transport if enabled
+	// Start HTTP transport in background if enabled (non-blocking)
 	var httpTransport *server.HTTPTransport
 	if enableHTTP {
 		config := server.HTTPTransportConfig{
@@ -258,6 +258,15 @@ func main() {
 			httpTransport.SetHealthChecker(healthChecker)
 		}
 
+		// Start HTTP transport in goroutine (non-blocking)
+		go func() {
+			fmt.Fprintf(os.Stderr, "DEBUG: Starting HTTP+SSE transport in background\n")
+			logger.Info("starting HTTP+SSE transport", "addr", httpAddr)
+			if err := httpTransport.Start(); err != nil && err != http.ErrServerClosed {
+				logger.Error("HTTP transport error", "error", err)
+			}
+		}()
+
 		// Setup graceful shutdown for HTTP transport
 		go func() {
 			<-ctx.Done()
@@ -268,20 +277,13 @@ func main() {
 				logger.Error("failed to shutdown HTTP transport", "error", err)
 			}
 		}()
+	}
 
-		// Run HTTP transport (blocking)
-		fmt.Fprintf(os.Stderr, "DEBUG: Starting HTTP+SSE transport\n")
-		if err := httpTransport.Start(); err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP transport error", "error", err)
-			os.Exit(1)
-		}
-	} else {
-		// Run the MCP server with context (stdio transport)
-		fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server\n")
-		if err := s.RunWithContext(ctx); err != nil {
-			logger.Error("server error", "error", err)
-			os.Exit(1)
-		}
+	// ALWAYS run stdio transport on main thread (blocking)
+	fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server\n")
+	if err := s.RunWithContext(ctx); err != nil {
+		logger.Error("server error", "error", err)
+		os.Exit(1)
 	}
 
 	// Server has shut down gracefully
