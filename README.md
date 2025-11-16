@@ -47,13 +47,10 @@ The server provides LLMs with tools to interact with OpenStreetMap data, includi
 | `route_sample` | Sample points along a route at specified intervals | `{"polyline": "a~l~FfynpOnlB_pDhgEhjD", "interval": 100}` |
 | `sort_by_distance` | Sort OSM elements by distance from a reference point | `{"elements": [...], "ref": {"latitude": 37.7749, "longitude": -122.4194}}` |
 | `find_nearby_places` | Find points of interest near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "category": "restaurant", "limit": 5}` |
-| `search_category` | Search for places by category within a rectangular area | `{"category": "cafe", "north_lat": 37.78, "south_lat": 37.77, "east_lon": -122.41, "west_lon": -122.42, "limit": 10}` |
-| `get_route` | Calculate a route between two locations with distance and duration | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
 | `get_route_directions` | Get detailed turn-by-turn directions for a route between locations | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "mode": "car"}` |
 | `suggest_meeting_point` | Suggest an optimal meeting point for multiple people | `{"locations": [{"latitude": 37.7749, "longitude": -122.4194}, {"latitude": 37.8043, "longitude": -122.2711}], "category": "cafe", "limit": 3}` |
 | `explore_area` | Explore an area and get comprehensive information about it | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000}` |
 | `find_charging_stations` | Find electric vehicle charging stations near a location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 5000, "limit": 10}` |
-| `find_route_charging_stations` | Find electric vehicle charging stations along a route | `{"start_lat": 37.7749, "start_lon": -122.4194, "end_lat": 37.8043, "end_lon": -122.2711, "range": 300, "buffer": 5000}` |
 | `analyze_commute` | Analyze transportation options between home and work locations | `{"home_latitude": 37.7749, "home_longitude": -122.4194, "work_latitude": 37.8043, "work_longitude": -122.2711, "transport_modes": ["car", "cycling", "walking"]}` |
 | `analyze_neighborhood` | Evaluate neighborhood livability for real estate and relocation decisions | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 1000, "include_price_data": true}` |
 | `find_schools_nearby` | Find educational institutions near a specific location | `{"latitude": 37.7749, "longitude": -122.4194, "radius": 2000, "school_type": "elementary", "limit": 5}` |
@@ -326,10 +323,13 @@ No API keys are required as these are open public APIs, but the server follows u
 
 - `cmd/osmmcp` - Main application entry point
 - `pkg/server` - MCP server implementation
-- `pkg/tools` - OpenStreetMap tool implementations and tool registry (14 tools)
+- `pkg/tools` - OpenStreetMap tool implementations and tool registry (25 tools)
 - `pkg/osm` - OpenStreetMap API clients, rate limiting, polyline encoding, and utilities
 - `pkg/geo` - Geographic types, bounding boxes, and Haversine distance calculations
+- `pkg/core` - Core utilities including HTTP retry logic, validation, error handling, Overpass query builder, and OSRM service client
 - `pkg/cache` - TTL-based caching layer for API responses (5-minute default)
+- `pkg/monitoring` - Prometheus metrics, health checking, connection monitoring, and observability
+- `pkg/tracing` - OpenTelemetry tracing support for distributed tracing and debugging
 - `pkg/testutil` - Testing utilities and helpers
 - `pkg/version` - Build metadata and version information
 

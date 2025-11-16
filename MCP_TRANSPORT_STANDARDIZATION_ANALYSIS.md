@@ -1,5 +1,23 @@
 # OSM MCP Transport Standardization Analysis
 
+---
+## ⚠️ DOCUMENT STATUS: RESOLVED / ARCHIVED
+
+**Original Analysis Date:** 2025-11-12
+**Resolution Date:** 2025-11-14
+**Current Status:** ✅ **CRITICAL ISSUE FIXED**
+
+The critical dual transport issue identified in this analysis has been **RESOLVED**. The code in `cmd/osmmcp/main.go` (lines 242-286) now correctly implements dual transport support:
+- HTTP transport runs in a goroutine (non-blocking) when `--enable-http` is set
+- stdio transport ALWAYS runs on the main thread (blocking)
+- Both transports operate simultaneously as required
+
+This document is retained for historical reference only.
+
+---
+
+# [Original Analysis Below]
+
 **Date:** 2025-11-12
 **Branch:** `claude/mcp-transport-standardization-011CV3e4NuwUjWpRbnz42NvL`
 **Status:** Analysis Complete

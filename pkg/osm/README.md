@@ -52,7 +52,7 @@ bbox.Buffer(1000) // Add 1000 meter buffer
 The package follows these design principles:
 
 1. **Single Responsibility**: Each file and component has a clear, focused purpose
-2. **Reusability**: Components are designed to be reused across all 14 tools
+2. **Reusability**: Components are designed to be reused across all 25 tools
 3. **API Compliance**: Strict adherence to OpenStreetMap API usage policies via rate limiting
 4. **Performance**: Connection pooling, response caching, and efficient polyline encoding
 5. **Security**: Properly configured timeouts, connection limits, and coordinate validation
