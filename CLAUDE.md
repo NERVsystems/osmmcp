@@ -117,7 +117,7 @@ This is a Go implementation of the Model Context Protocol (MCP) server providing
 ### Core Architecture Layers
 
 1. **MCP Server Layer** (`pkg/server/`) - Handles MCP protocol communication and request routing
-2. **Tools Layer** (`pkg/tools/`) - Implements 30+ OSM-specific tools using a registry pattern
+2. **Tools Layer** (`pkg/tools/`) - Implements 25 OSM-specific tools using a registry pattern
 3. **Core Utilities** (`pkg/core/`) - Shared functionality including HTTP retry logic, validation, error handling, and service clients
 4. **OSM Integration** (`pkg/osm/`) - OpenStreetMap API client with rate limiting and caching
 5. **Caching Layer** (`pkg/cache/`) - LRU caching for API responses and tile resources
