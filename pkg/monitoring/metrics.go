@@ -147,7 +147,7 @@ type ServiceHealth struct {
 	Version       string                 `json:"version"`
 	Status        string                 `json:"status"` // "healthy", "degraded", "unhealthy"
 	Uptime        time.Duration          `json:"uptime"`
-	UptimeSeconds int64                  `json:"uptime_seconds"`      // Uptime in seconds for spec compliance
+	UptimeSeconds int64                  `json:"uptime_seconds"`       // Uptime in seconds for spec compliance
 	StartTime     time.Time              `json:"start_time,omitempty"` // Optional field
 	Connections   map[string]ConnStatus  `json:"connections"`
 	Metrics       map[string]interface{} `json:"metrics,omitempty"` // Optional field
