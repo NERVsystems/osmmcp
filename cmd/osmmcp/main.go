@@ -38,6 +38,7 @@ var (
 	httpBaseURL   string
 	httpAuthType  string
 	httpAuthToken string
+	httpOnly      bool // Run only HTTP transport, skip stdio
 
 	// Monitoring flags
 	enableMonitoring bool
@@ -65,6 +66,7 @@ func init() {
 	flag.StringVar(&httpBaseURL, "http-base-url", "", "Base URL for HTTP transport (auto-detected if empty)")
 	flag.StringVar(&httpAuthType, "http-auth-type", "none", "HTTP authentication type: none, bearer, basic")
 	flag.StringVar(&httpAuthToken, "http-auth-token", "", "HTTP authentication token")
+	flag.BoolVar(&httpOnly, "http-only", false, "Run only HTTP transport, skip stdio (requires --enable-http)")
 
 	// Monitoring flags
 	flag.BoolVar(&enableMonitoring, "enable-monitoring", true, "Enable Prometheus metrics and health endpoints")
@@ -150,6 +152,12 @@ func main() {
 		osm.UpdateOSRMRateLimits(osrmRPS, osrmBurst)
 	}
 
+	// Validate http-only flag
+	if httpOnly && !enableHTTP {
+		logger.Error("--http-only requires --enable-http to be set")
+		os.Exit(1)
+	}
+
 	logger.Info("starting OpenStreetMap MCP server",
 		"version", ver.BuildVersion,
 		"log_level", logLevel.String(),
@@ -160,6 +168,7 @@ func main() {
 		"overpass_burst", overpassBurst,
 		"osrm_rps", osrmRPS,
 		"osrm_burst", osrmBurst,
+		"http_only", httpOnly,
 		"monitoring_enabled", enableMonitoring,
 		"monitoring_addr", monitoringAddr)
 
@@ -279,11 +288,18 @@ func main() {
 		}()
 	}
 
-	// ALWAYS run stdio transport on main thread (blocking)
-	fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server\n")
-	if err := s.RunWithContext(ctx); err != nil {
-		logger.Error("server error", "error", err)
-		os.Exit(1)
+	// Run stdio transport on main thread (blocking) unless http-only mode
+	if !httpOnly {
+		fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server\n")
+		if err := s.RunWithContext(ctx); err != nil {
+			logger.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		// In http-only mode, just wait for context cancellation
+		logger.Info("running in HTTP-only mode, stdio transport disabled")
+		<-ctx.Done()
+		logger.Info("shutdown signal received")
 	}
 
 	// Server has shut down gracefully

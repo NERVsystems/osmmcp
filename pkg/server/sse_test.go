@@ -323,15 +323,17 @@ func TestSSEStreamingData(t *testing.T) {
 		t.Fatalf("Expected 200, got %d. Body: %s", resp.StatusCode, string(body))
 	}
 
-	// Parse SSE events
+	// Parse SSE events using a channel to avoid race conditions
 	reader := bufio.NewReader(resp.Body)
-	events := make([]string, 0)
+	eventsCh := make(chan string, 10)
 
 	// Read a few events with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
+	// Start goroutine to read events
 	go func() {
+		defer close(eventsCh)
 		for {
 			select {
 			case <-ctx.Done():
@@ -342,15 +344,33 @@ func TestSSEStreamingData(t *testing.T) {
 					return
 				}
 				if strings.HasPrefix(line, "event:") || strings.HasPrefix(line, "data:") {
-					events = append(events, strings.TrimSpace(line))
+					select {
+					case eventsCh <- strings.TrimSpace(line):
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}
 	}()
 
-	// Wait for timeout
-	<-ctx.Done()
+	// Collect events from channel
+	events := make([]string, 0)
+	for {
+		select {
+		case event, ok := <-eventsCh:
+			if !ok {
+				// Channel closed, done reading
+				goto done
+			}
+			events = append(events, event)
+		case <-ctx.Done():
+			// Timeout reached
+			goto done
+		}
+	}
 
+done:
 	// Should have received some events
 	if len(events) == 0 {
 		t.Fatal("No SSE events received")

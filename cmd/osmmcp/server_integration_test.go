@@ -50,6 +50,7 @@ func TestServerMainHealth(t *testing.T) {
 	defer cancel()
 	runCmd := exec.CommandContext(ctx, binPath,
 		"--enable-http",
+		"--http-only", // Skip stdio transport for testing
 		"--http-addr", fmt.Sprintf("127.0.0.1:%d", port),
 		"--enable-monitoring=false",
 	)
