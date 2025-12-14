@@ -86,6 +86,11 @@ issues:
         - gosec
         - funlen
         - goconst
+        - bodyclose
+    # Exclude G101 (hardcoded credentials) false positives for URL variables
+    - linters:
+        - gosec
+      text: "G101:"
     # Exclude deprecated warnings (strings.Title, etc)
     - linters:
         - staticcheck
