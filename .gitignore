@@ -25,6 +25,9 @@ go.work
 .idea/
 .vscode/
 
+# Claude Code local settings
+.claude/
+
 # Generated/test config files
 test-config.json
 
