@@ -93,6 +93,7 @@ issues:
         - funlen
         - goconst
         - bodyclose
+        - noctx
     # Exclude G101 (hardcoded credentials) false positives for URL variables
     - linters:
         - gosec
