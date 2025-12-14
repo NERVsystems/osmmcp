@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    uses: NERVsystems/nerv-nerva-deploy/.github/workflows/build-and-push-ecr.yml@main
+    uses: NERVsystems/nerv-nerva-deploy/.github/workflows/build-and-push-ecr.yml@master
     with:
       service_name: osmmcp
       ecr_repository: nerv-osmmcp
