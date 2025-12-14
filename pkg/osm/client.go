@@ -5,17 +5,17 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
-	"log/slog"
-
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 const (

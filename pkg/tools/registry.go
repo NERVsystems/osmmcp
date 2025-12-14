@@ -8,14 +8,15 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/NERVsystems/osmmcp/pkg/core"
-	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/tools/prompts"
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 // Registry contains all tool definitions and handlers

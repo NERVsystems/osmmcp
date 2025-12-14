@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	mcpserver "github.com/mark3labs/mcp-go/server"
+
 	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/monitoring"
-	mcpserver "github.com/mark3labs/mcp-go/server"
 )
 
 // HTTPTransportConfig holds configuration for the HTTP transport

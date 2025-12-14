@@ -15,11 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NERVsystems/osmmcp/pkg/core"
-	"github.com/NERVsystems/osmmcp/pkg/osm"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/mark3labs/mcp-go/mcp"
 	"golang.org/x/sync/singleflight"
+
+	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/osm"
 )
 
 const (

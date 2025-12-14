@@ -7,10 +7,11 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // RouteFetchInput defines the input parameters for fetching a route

@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // GeoDistanceInput defines the input parameters for calculating distance

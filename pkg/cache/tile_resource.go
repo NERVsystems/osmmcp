@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"github.com/mark3labs/mcp-go/mcp"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 const (

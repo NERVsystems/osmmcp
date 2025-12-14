@@ -3,19 +3,19 @@ package server
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
-	"log/slog"
-
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/time/rate"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 // contextKey is a custom type for context keys to avoid collisions

@@ -12,9 +12,10 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
-	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 const (

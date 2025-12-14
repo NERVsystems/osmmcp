@@ -7,8 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 func TestTracingMiddleware(t *testing.T) {

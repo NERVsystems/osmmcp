@@ -8,10 +8,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 // RetryOptions configures retry behavior for HTTP requests

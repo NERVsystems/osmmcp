@@ -9,8 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	"go.opentelemetry.io/otel/attribute"
+
+	"github.com/NERVsystems/osmmcp/pkg/tracing"
 )
 
 // Item represents a cached item with expiration

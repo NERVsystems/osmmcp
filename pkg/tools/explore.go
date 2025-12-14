@@ -11,9 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // ExploreAreaTool returns a tool definition for exploring an area

@@ -11,10 +11,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/NERVsystems/osmmcp/pkg/osm/queries"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 const (

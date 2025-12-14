@@ -10,8 +10,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/NERVsystems/osmmcp/pkg/core"
 )
 
 // GetMapImageTool returns a tool definition for retrieving and displaying map images
