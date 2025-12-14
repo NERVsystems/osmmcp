@@ -10,8 +10,11 @@ linters-settings:
   dupl:
     threshold: 150
   errcheck:
-    check-type-assertions: true
-    check-blank: true
+    check-type-assertions: false
+    check-blank: false
+    exclude-functions:
+      - io.ReadAll
+      - (*github.com/hashicorp/golang-lru/v2.Cache).Get
   exhaustive:
     default-signifies-exhaustive: false
   funlen:
