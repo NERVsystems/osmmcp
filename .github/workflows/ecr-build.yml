@@ -1,4 +1,3 @@
-# Build and push to ECR on merge to main or tag push
 name: Build and Push to ECR
 
 on:
