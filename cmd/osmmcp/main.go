@@ -19,7 +19,9 @@ import (
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/monitoring"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
+	"github.com/NERVsystems/osmmcp/pkg/registration"
 	"github.com/NERVsystems/osmmcp/pkg/server"
+	"github.com/NERVsystems/osmmcp/pkg/tools"
 	"github.com/NERVsystems/osmmcp/pkg/tracing"
 	ver "github.com/NERVsystems/osmmcp/pkg/version"
 )
@@ -43,6 +45,12 @@ var (
 	// Monitoring flags
 	enableMonitoring bool
 	monitoringAddr   string
+
+	// Registration flags
+	enableRegistration bool
+	registryURL        string
+	serviceURL         string
+	internalURL        string
 
 	// Rate limits for each service
 	nominatimRPS   float64
@@ -74,6 +82,12 @@ func init() {
 	// Monitoring flags
 	flag.BoolVar(&enableMonitoring, "enable-monitoring", true, "Enable Prometheus metrics and health endpoints")
 	flag.StringVar(&monitoringAddr, "monitoring-addr", ":9090", "Monitoring server address")
+
+	// Registration flags
+	flag.BoolVar(&enableRegistration, "enable-registration", false, "Enable service registration with nerva-monitor")
+	flag.StringVar(&registryURL, "registry-url", "", "nerva-monitor registry URL (e.g., http://nerva-monitor:7083)")
+	flag.StringVar(&serviceURL, "service-url", "", "External URL where this service is accessible")
+	flag.StringVar(&internalURL, "internal-url", "", "Internal URL for container environments")
 
 	// Nominatim rate limits
 	flag.Float64Var(&nominatimRPS, "nominatim-rps", 1.0, "Nominatim rate limit in requests per second")
@@ -249,6 +263,47 @@ func main() {
 				logger.Error("failed to shutdown monitoring server", "error", err)
 			}
 		}()
+	}
+
+	// Initialize registration client if enabled
+	var regClient *registration.Client
+	if enableRegistration {
+		// Get tool names from registry
+		toolRegistry := tools.NewRegistry(logger)
+		toolNames := toolRegistry.GetToolNames()
+
+		// Build service URL and health URL
+		svcURL := serviceURL
+		healthURL := serviceURL + "/health"
+		if serviceURL == "" && enableHTTP {
+			svcURL = fmt.Sprintf("http://localhost%s", httpAddr)
+			healthURL = fmt.Sprintf("http://localhost%s/health", httpAddr)
+		}
+
+		regCfg := registration.Config{
+			Enabled:           enableRegistration,
+			RegistryURL:       registryURL,
+			ServiceName:       "osmmcp",
+			ServiceType:       "mcp",
+			ServiceURL:        svcURL,
+			HealthURL:         healthURL,
+			InternalURL:       internalURL,
+			InternalHealthURL: internalURL + "/health",
+			Version:           ver.BuildVersion,
+			Capabilities:      []string{"geocoding", "routing", "poi", "mapping"},
+			Tools:             toolNames,
+			Metadata: map[string]interface{}{
+				"transport": map[string]bool{"stdio": true, "http": enableHTTP},
+			},
+		}
+		regClient = registration.NewClient(regCfg, logger)
+		regClient.Start(ctx)
+		defer regClient.Stop()
+
+		logger.Info("registration client initialized",
+			"registry_url", registryURL,
+			"service_url", svcURL,
+			"tool_count", len(toolNames))
 	}
 
 	// Start HTTP transport in background if enabled (non-blocking)

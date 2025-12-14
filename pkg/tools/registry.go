@@ -290,6 +290,16 @@ func (r *Registry) RegisterPrompts(mcpServer *server.MCPServer) {
 	prompts.RegisterGeocodingPrompts(mcpServer)
 }
 
+// GetToolNames returns a list of all tool names.
+func (r *Registry) GetToolNames() []string {
+	defs := r.GetToolDefinitions()
+	names := make([]string, len(defs))
+	for i, def := range defs {
+		names[i] = def.Name
+	}
+	return names
+}
+
 // RegisterAll registers all tools and prompts with the MCP server.
 func (r *Registry) RegisterAll(mcpServer *server.MCPServer) {
 	// Create a context with the registry for capabilities lookup
