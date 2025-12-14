@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -59,6 +60,11 @@ func TestHandler_Health(t *testing.T) {
 }
 
 func TestIsProcessRunning(t *testing.T) {
+	// Skip on Windows - process checking uses Unix-specific signal 0
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows - uses Unix-specific signal handling")
+	}
+
 	// Test with current process (should be running)
 	currentPID := os.Getpid()
 	if !isProcessRunning(currentPID) {
@@ -79,6 +85,11 @@ func TestIsProcessRunning(t *testing.T) {
 }
 
 func TestParentProcessMonitoring(t *testing.T) {
+	// Skip on Windows - process checking uses Unix-specific signal 0
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows - uses Unix-specific signal handling")
+	}
+
 	// Test the parent process monitoring logic in isolation
 	s, err := NewServer()
 	if err != nil {
@@ -123,6 +134,11 @@ func TestParentProcessMonitoring(t *testing.T) {
 }
 
 func TestParentProcessMonitoringWithRealProcess(t *testing.T) {
+	// Skip on Windows - uses Unix-specific signal handling and 'sleep' command
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows - uses Unix-specific signal handling")
+	}
+
 	// This test creates a real child process to test parent monitoring
 	// Skip on short tests as it requires subprocess execution
 	if testing.Short() {
@@ -162,6 +178,11 @@ func TestParentProcessMonitoringWithRealProcess(t *testing.T) {
 
 // TestParentProcessMonitoringIntegration tests the integration without blocking on stdin
 func TestParentProcessMonitoringIntegration(t *testing.T) {
+	// Skip on Windows - uses Unix-specific signal handling
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows - uses Unix-specific signal handling")
+	}
+
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}

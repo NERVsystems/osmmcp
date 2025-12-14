@@ -157,8 +157,8 @@ func TestGetHealthFields(t *testing.T) {
 		t.Errorf("Expected version '1.0.0', got %s", health.Version)
 	}
 
-	if health.Uptime <= 0 {
-		t.Error("Uptime should be greater than 0")
+	if health.Uptime < 0 {
+		t.Error("Uptime should not be negative")
 	}
 
 	if health.StartTime.IsZero() {

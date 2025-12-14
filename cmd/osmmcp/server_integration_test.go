@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
-	"syscall"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -39,7 +39,11 @@ func TestServerMainHealth(t *testing.T) {
 
 	// Build server binary inside temporary directory
 	binDir := t.TempDir()
-	binPath := filepath.Join(binDir, "osmmcp-test")
+	binName := "osmmcp-test"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+	binPath := filepath.Join(binDir, binName)
 	buildCmd := exec.Command("go", "build", "-o", binPath, ".")
 	if out, err := buildCmd.CombinedOutput(); err != nil {
 		t.Fatalf("build failed: %v\n%s", err, out)
@@ -58,7 +62,9 @@ func TestServerMainHealth(t *testing.T) {
 		t.Fatalf("failed to start server: %v", err)
 	}
 	defer func() {
-		_ = runCmd.Process.Signal(syscall.SIGTERM)
+		// On Windows, Kill() is the only reliable way to terminate a process
+		// On Unix, Kill() sends SIGKILL which works for cleanup
+		_ = runCmd.Process.Kill()
 		runCmd.Wait() // wait for shutdown
 	}()
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -90,8 +91,11 @@ func TestGenerateClientConfig(t *testing.T) {
 				if err != nil {
 					t.Errorf("Failed to stat config file: %v", err)
 				}
-				if mode := info.Mode(); mode != 0600 {
-					t.Errorf("Config file has wrong permissions: %v, want 0600", mode)
+				// Skip permission check on Windows - Unix-style permissions don't apply
+				if runtime.GOOS != "windows" {
+					if mode := info.Mode(); mode != 0600 {
+						t.Errorf("Config file has wrong permissions: %v, want 0600", mode)
+					}
 				}
 
 				// Check config content
