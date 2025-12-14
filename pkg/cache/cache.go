@@ -212,9 +212,13 @@ func (c *TTLCache) evictOldest() {
 		keyExpirations = append(keyExpirations, keyExpiration{k, exp})
 	}
 
-	// Sort by expiration time (oldest first)
+	// Sort by expiration time (oldest first), with key name as tiebreaker
+	// for deterministic behavior when expiration times are equal
 	sort.Slice(keyExpirations, func(i, j int) bool {
-		return keyExpirations[i].expiration < keyExpirations[j].expiration
+		if keyExpirations[i].expiration != keyExpirations[j].expiration {
+			return keyExpirations[i].expiration < keyExpirations[j].expiration
+		}
+		return keyExpirations[i].key < keyExpirations[j].key
 	})
 
 	// Delete the oldest items
