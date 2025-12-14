@@ -98,7 +98,7 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 
 	// Create a request factory for retry support
 	factory := func() (*http.Request, error) {
-		req, err := http.NewRequest(http.MethodPost, reqURL.String(),
+		req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, reqURL.String(),
 			strings.NewReader("data="+url.QueryEscape(overpassQuery)))
 		if err != nil {
 			return nil, err

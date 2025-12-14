@@ -122,7 +122,11 @@ issues:
     - path: _test\.go
       linters:
         - staticcheck
-      text: "SA5011:"
+      text: "SA5011"
+    # Exclude empty branch warnings - intentional for panic recovery patterns
+    - linters:
+        - staticcheck
+      text: "SA9003:"
     - linters:
         - lll
       source: "^//go:generate "

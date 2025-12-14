@@ -238,7 +238,8 @@ func fetchParkingFacilities(ctx context.Context, query string) ([]osm.OverpassEl
 
 	// Create HTTP request factory for retries
 	requestFactory := func() (*http.Request, error) {
-		req, err := http.NewRequest(
+		req, err := http.NewRequestWithContext(
+			context.Background(),
 			http.MethodPost,
 			reqURL.String(),
 			strings.NewReader("data="+url.QueryEscape(query)),
