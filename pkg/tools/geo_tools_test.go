@@ -5,8 +5,9 @@ import (
 	"math"
 	"testing"
 
-	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 )
 
 func TestHandleGeoDistance(t *testing.T) {

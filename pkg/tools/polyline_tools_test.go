@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 )
 
 func TestHandlePolylineDecode(t *testing.T) {

@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/core"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 // GetTileCacheTool returns a tool definition for managing cached tiles

@@ -44,6 +44,9 @@ linters-settings:
     line-length: 140
   misspell:
     locale: US
+    ignore-words:
+      - neighbourhood  # OSM tag value
+      - theatre        # OSM tag value
   nolintlint:
     allow-unused: false
     require-explanation: false
@@ -103,13 +106,13 @@ issues:
     - linters:
         - staticcheck
       text: "U1000:"
-    # Exclude nil slice check warnings
+    # Exclude nil slice check warnings (gosimple)
     - linters:
-        - staticcheck
+        - gosimple
       text: "S1009:"
-    # Exclude unnecessary fmt.Sprintf warnings
+    # Exclude unnecessary fmt.Sprintf warnings (gosimple)
     - linters:
-        - staticcheck
+        - gosimple
       text: "S1039:"
     # Exclude possible nil dereference in tests
     - path: _test\.go

@@ -11,8 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/NERVsystems/osmmcp/pkg/osm"
 	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/NERVsystems/osmmcp/pkg/osm"
 )
 
 // School represents an educational institution

@@ -97,7 +97,7 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 			case <-time.After(delay):
 				// Continue with retry
 			case <-ctx.Done():
-				span.SetStatus(codes.Error, "request cancelled")
+				span.SetStatus(codes.Error, "request canceled")
 				return nil, ctx.Err()
 			}
 
@@ -231,7 +231,7 @@ func WithRetryFactory(ctx context.Context, factory RequestFactory, client *http.
 			case <-time.After(delay):
 				// Continue with retry
 			case <-ctx.Done():
-				span.SetStatus(codes.Error, "request cancelled")
+				span.SetStatus(codes.Error, "request canceled")
 				return nil, ctx.Err()
 			}
 

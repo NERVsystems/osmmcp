@@ -106,12 +106,12 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	// Create a text description of the location
 	description := fmt.Sprintf("Map location: %.6f, %.6f (zoom level: %d)\n", lat, lon, zoom)
 	description += fmt.Sprintf("View this location on OpenStreetMap: %s\n\n", osmURL)
-	description += fmt.Sprintf("Map area information:\n")
+	description += "Map area information:\n"
 	description += fmt.Sprintf("- Bounds: North: %.6f, South: %.6f, East: %.6f, West: %.6f\n",
 		tileInfo.NorthLat, tileInfo.SouthLat, tileInfo.EastLon, tileInfo.WestLon)
 	description += fmt.Sprintf("- Scale: %s (%.2f meters per pixel)\n", tileInfo.MapScale, tileInfo.PixelSize)
 	description += fmt.Sprintf("- Tile: %d/%d/%d\n", zoom, tileX, tileY)
-	description += fmt.Sprintf("- Attribution: © OpenStreetMap contributors")
+	description += "- Attribution: © OpenStreetMap contributors"
 
 	// Create metadata for the response
 	metadata := struct {
