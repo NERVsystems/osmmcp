@@ -1,4 +1,4 @@
-# Build and push Docker image to ECR on merge to main or tag push
+# Build and push to ECR on merge to main or tag push
 name: Build and Push to ECR
 
 on:
