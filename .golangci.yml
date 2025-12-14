@@ -45,8 +45,11 @@ linters-settings:
   misspell:
     locale: US
     ignore-words:
-      - neighbourhood  # OSM tag value
-      - theatre        # OSM tag value
+      - neighbourhood   # OSM tag value
+      - theatre         # OSM tag value
+      - centre          # OSM tag value (sports_centre, arts_centre)
+      - storey          # OSM/British English for multi-story parking
+      - Amphitheatre    # Proper noun (Google's 1600 Amphitheatre Parkway)
   nolintlint:
     allow-unused: false
     require-explanation: false

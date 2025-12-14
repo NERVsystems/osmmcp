@@ -206,7 +206,7 @@ func (c *Client) register() {
 	}
 
 	url := fmt.Sprintf("%s/api/register", c.cfg.RegistryURL)
-	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		c.logger.Error("failed to create registration request", "error", err)
 		c.setRegistered(false)
@@ -254,7 +254,7 @@ func (c *Client) deregister() {
 	}
 
 	url := fmt.Sprintf("%s/api/register/%s", c.cfg.RegistryURL, c.cfg.ServiceName)
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodDelete, url, nil)
 	if err != nil {
 		c.logger.Debug("failed to create deregistration request", "error", err)
 		return
