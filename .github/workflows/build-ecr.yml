@@ -9,10 +9,10 @@ on:
 
 jobs:
   build:
+    permissions:
+      id-token: write
+      contents: read
     uses: NERVsystems/nerv-nerva-deploy/.github/workflows/build-and-push-ecr.yml@master
     with:
       service_name: osmmcp
       ecr_repository: nerv-osmmcp
-    permissions:
-      id-token: write
-      contents: read
