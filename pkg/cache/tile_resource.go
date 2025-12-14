@@ -135,7 +135,7 @@ func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom 
 func (trm *TileResourceManager) SetTileData(uri string, data []byte) error {
 	// Start tracing span
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "tile_cache.set_data")
+	_, span := tracing.StartSpan(ctx, "tile_cache.set_data")
 	defer span.End()
 
 	span.SetAttributes(

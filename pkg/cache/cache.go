@@ -60,7 +60,7 @@ func NewTTLCache(defaultTTL, cleanupInterval time.Duration, maxItems int) *TTLCa
 func (c *TTLCache) Set(key string, value interface{}) {
 	// Create context and start span for tracing
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "cache.set")
+	_, span := tracing.StartSpan(ctx, "cache.set")
 	defer span.End()
 
 	span.SetAttributes(
@@ -76,7 +76,7 @@ func (c *TTLCache) Set(key string, value interface{}) {
 func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) {
 	// Create context and start span for tracing
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "cache.set_with_ttl")
+	_, span := tracing.StartSpan(ctx, "cache.set_with_ttl")
 	defer span.End()
 
 	var expiration int64
@@ -113,7 +113,7 @@ func (c *TTLCache) SetWithTTL(key string, value interface{}, ttl time.Duration) 
 func (c *TTLCache) Get(key string) (interface{}, bool) {
 	// Create context and start span for tracing
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "cache.get")
+	_, span := tracing.StartSpan(ctx, "cache.get")
 	defer span.End()
 
 	c.mu.RLock()
@@ -146,7 +146,7 @@ func (c *TTLCache) Get(key string) (interface{}, bool) {
 func (c *TTLCache) Delete(key string) {
 	// Create context and start span for tracing
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "cache.delete")
+	_, span := tracing.StartSpan(ctx, "cache.delete")
 	defer span.End()
 
 	span.SetAttributes(
@@ -171,7 +171,7 @@ func (c *TTLCache) Count() int {
 func (c *TTLCache) Clear() {
 	// Create context and start span for tracing
 	ctx := context.Background()
-	ctx, span := tracing.StartSpan(ctx, "cache.clear")
+	_, span := tracing.StartSpan(ctx, "cache.clear")
 	defer span.End()
 
 	c.mu.Lock()

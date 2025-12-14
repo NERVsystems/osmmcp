@@ -163,7 +163,7 @@ func TestAnalyzeNeighborhood_ScoreCalculation(t *testing.T) {
 		{
 			name:     "Walk score calculation",
 			input:    []int{5, 3, 2, 1, 2, 10}, // shops, restaurants, cafes, parks, pharmacies, footpaths
-			expected: 33,                       // (5*2 + 3*2 + 2 + 1*3 + 2*2 + 10) / 3 = 33
+			expected: 11,                       // (5*2 + 3*2 + 2 + 1*3 + 2*2 + 10) / 3 = 35/3 = 11
 			function: func(args ...int) int {
 				return calculateWalkScore(args[0], args[1], args[2], args[3], args[4], args[5])
 			},

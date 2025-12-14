@@ -23,9 +23,6 @@ const (
 
 	// Default cache size for route results
 	defaultRouteCacheSize = 256
-
-	// Default cache TTL for route results
-	defaultRouteCacheTTL = 24 * time.Hour
 )
 
 var (

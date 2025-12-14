@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"sync"
 	"testing"
 	"time"
 )
@@ -218,29 +217,4 @@ func TestParentProcessMonitoringIntegration(t *testing.T) {
 
 	// Test shutdown mechanism (don't wait since server wasn't actually started)
 	s.Shutdown()
-}
-
-// testLogHandler is a custom slog handler for testing
-type testLogHandler struct {
-	logs  *[]string
-	mutex *sync.Mutex
-}
-
-func (h *testLogHandler) Enabled(context.Context, slog.Level) bool {
-	return true
-}
-
-func (h *testLogHandler) Handle(ctx context.Context, record slog.Record) error {
-	h.mutex.Lock()
-	defer h.mutex.Unlock()
-	*h.logs = append(*h.logs, record.Message)
-	return nil
-}
-
-func (h *testLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h
-}
-
-func (h *testLogHandler) WithGroup(name string) slog.Handler {
-	return h
 }

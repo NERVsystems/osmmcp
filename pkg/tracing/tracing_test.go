@@ -34,7 +34,7 @@ func TestInitTracing_NoEndpoint(t *testing.T) {
 	}
 
 	// Test that operations work but are no-ops
-	ctx, span := StartSpan(ctx, "test-span")
+	_, span := StartSpan(ctx, "test-span")
 	if span == nil {
 		t.Fatal("StartSpan returned nil span")
 	}

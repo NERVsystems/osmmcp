@@ -57,7 +57,6 @@ type HTTPTransport struct {
 	sseServer     *mcpserver.SSEServer
 	mux           *http.ServeMux
 	httpSrv       *http.Server
-	rateLimiter   *RateLimiter
 	healthChecker *monitoring.HealthChecker
 	mu            sync.RWMutex
 }

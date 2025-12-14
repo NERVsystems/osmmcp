@@ -18,6 +18,14 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+// Context keys
+const (
+	requestIDKey contextKey = "request_id"
+)
+
 // RateLimiter provides per-IP rate limiting
 type RateLimiter struct {
 	visitors    map[string]*visitor
@@ -225,7 +233,7 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			if reqID == "" {
 				reqID = generateRequestID()
 			}
-			ctx := context.WithValue(r.Context(), "request_id", reqID)
+			ctx := context.WithValue(r.Context(), requestIDKey, reqID)
 			r = r.WithContext(ctx)
 
 			// Log request start
