@@ -1,0 +1,18 @@
+# Build and push to ECR on merge to main or tag push
+name: Build and Push to ECR
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: NERVsystems/nerv-nerva-deploy/.github/workflows/build-and-push-ecr.yml@main
+    with:
+      service_name: osmmcp
+      ecr_repository: nerv-osmmcp
+    permissions:
+      id-token: write
+      contents: read
