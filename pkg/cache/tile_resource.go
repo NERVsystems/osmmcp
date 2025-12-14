@@ -75,7 +75,7 @@ func NewTileResourceManager(logger *slog.Logger) *TileResourceManager {
 // GetTileResource retrieves a tile resource by coordinates
 func (trm *TileResourceManager) GetTileResource(ctx context.Context, x, y, zoom int) (*TileResource, error) {
 	// Start tracing span
-	ctx, span := tracing.StartSpan(ctx, "tile_cache.get_resource")
+	_, span := tracing.StartSpan(ctx, "tile_cache.get_resource")
 	defer span.End()
 
 	span.SetAttributes(
@@ -217,7 +217,7 @@ func (trm *TileResourceManager) ListTileResources() []mcp.Resource {
 // ReadTileResource reads a tile resource by URI
 func (trm *TileResourceManager) ReadTileResource(ctx context.Context, uri string) (*mcp.ReadResourceResult, error) {
 	// Start tracing span
-	ctx, span := tracing.StartSpan(ctx, "tile_cache.read_resource")
+	_, span := tracing.StartSpan(ctx, "tile_cache.read_resource")
 	defer span.End()
 
 	span.SetAttributes(attribute.String("tile.uri", uri))
