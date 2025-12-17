@@ -21,8 +21,7 @@ type HTTPTransportConfig struct {
 	BaseURL        string  `json:"base_url"`         // Base URL for service discovery
 	AuthType       string  `json:"auth_type"`        // Authentication type: "bearer", "basic", "none"
 	AuthToken      string  `json:"auth_token"`       // Authentication token
-	SSEEndpoint    string  `json:"sse_endpoint"`     // SSE endpoint path (default: "/sse")
-	MsgEndpoint    string  `json:"msg_endpoint"`     // Message endpoint path (default: "/message")
+	MCPEndpoint    string  `json:"mcp_endpoint"`     // MCP endpoint path (default: "/mcp")
 	RateLimit      float64 `json:"rate_limit"`       // Requests per second per IP (0 = disabled)
 	RateBurst      int     `json:"rate_burst"`       // Burst size for rate limiter
 	MaxRequestSize int64   `json:"max_request_size"` // Maximum request body size in bytes
@@ -39,8 +38,7 @@ func DefaultHTTPTransportConfig() HTTPTransportConfig {
 		BaseURL:        "",
 		AuthType:       "none",
 		AuthToken:      "",
-		SSEEndpoint:    "/sse",
-		MsgEndpoint:    "/message",
+		MCPEndpoint:    "/mcp",
 		RateLimit:      10,       // 10 requests per second per IP
 		RateBurst:      20,       // Allow bursts of 20
 		MaxRequestSize: 10 << 20, // 10 MB
@@ -51,15 +49,15 @@ func DefaultHTTPTransportConfig() HTTPTransportConfig {
 	}
 }
 
-// HTTPTransport implements HTTP+SSE dual transport for MCP
+// HTTPTransport implements Streamable HTTP transport for MCP (2025-03-26 spec)
 type HTTPTransport struct {
-	config        HTTPTransportConfig
-	logger        *slog.Logger
-	sseServer     *mcpserver.SSEServer
-	mux           *http.ServeMux
-	httpSrv       *http.Server
-	healthChecker *monitoring.HealthChecker
-	mu            sync.RWMutex
+	config           HTTPTransportConfig
+	logger           *slog.Logger
+	streamableServer *mcpserver.StreamableHTTPServer
+	mux              *http.ServeMux
+	httpSrv          *http.Server
+	healthChecker    *monitoring.HealthChecker
+	mu               sync.RWMutex
 }
 
 // NewHTTPTransport creates a new HTTP transport instance
@@ -75,25 +73,23 @@ func NewHTTPTransport(mcpServer *mcpserver.MCPServer, config HTTPTransportConfig
 		}
 	}
 
-	// Create SSE server with proper endpoint configuration
-	sseServer := mcpserver.NewSSEServer(
+	// Create Streamable HTTP server (MCP 2025-03-26 spec)
+	streamableServer := mcpserver.NewStreamableHTTPServer(
 		mcpServer,
-		mcpserver.WithSSEEndpoint(config.SSEEndpoint),
-		mcpserver.WithMessageEndpoint(config.MsgEndpoint),
-		mcpserver.WithBaseURL(config.BaseURL),
+		mcpserver.WithEndpointPath(config.MCPEndpoint),
 	)
 
 	// Create HTTP mux
 	mux := http.NewServeMux()
 
 	transport := &HTTPTransport{
-		config:    config,
-		logger:    logger,
-		sseServer: sseServer,
-		mux:       mux,
+		config:           config,
+		logger:           logger,
+		streamableServer: streamableServer,
+		mux:              mux,
 	}
 
-	// Mount handlers with proper routing for dual transport support
+	// Mount handlers with proper routing for streamable HTTP
 	transport.setupRoutes()
 
 	return transport
@@ -116,16 +112,14 @@ func (t *HTTPTransport) setupRoutes() {
 	t.mux.HandleFunc("/ready", t.handleReady)
 	t.mux.HandleFunc("/live", t.handleLive)
 
-	// Debug endpoints (no auth required)
-	t.mux.HandleFunc(t.config.SSEEndpoint+"/debug", t.handleSSEDebug)
-	t.mux.HandleFunc(t.config.MsgEndpoint+"/debug", t.handleMessageDebug)
+	// Debug endpoint for MCP transport
+	t.mux.HandleFunc(t.config.MCPEndpoint+"/debug", t.handleMCPDebug)
 
-	// Mount both SSE and Message handlers for dual transport support
-	// This ensures both POST /message and SSE /sse work correctly
-	t.mux.Handle(t.config.SSEEndpoint, t.httpsEnforcement(t.authMiddleware(t.sseServer.SSEHandler()).ServeHTTP))
-	t.mux.Handle(t.config.SSEEndpoint+"/", t.httpsEnforcement(t.authMiddleware(t.sseServer.SSEHandler()).ServeHTTP))
-	t.mux.Handle(t.config.MsgEndpoint, t.httpsEnforcement(t.authMiddleware(t.sseServer.MessageHandler()).ServeHTTP))
-	t.mux.Handle(t.config.MsgEndpoint+"/", t.httpsEnforcement(t.authMiddleware(t.sseServer.MessageHandler()).ServeHTTP))
+	// Mount Streamable HTTP handler - single endpoint for all MCP operations (GET/POST/DELETE)
+	// GET:    SSE stream for server→client messages
+	// POST:   JSON-RPC messages (client→server)
+	// DELETE: Session termination
+	t.mux.Handle(t.config.MCPEndpoint, t.httpsEnforcement(t.authMiddleware(t.streamableServer).ServeHTTP))
 }
 
 // httpsEnforcement redirects HTTP requests to HTTPS if ForceHTTPS is enabled
@@ -155,7 +149,7 @@ func (t *HTTPTransport) authMiddleware(next http.Handler) http.Handler {
 		// Skip auth for health/discovery/debug endpoints
 		if r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/live" ||
 			r.URL.Path == "/" ||
-			r.URL.Path == t.config.SSEEndpoint+"/debug" || r.URL.Path == t.config.MsgEndpoint+"/debug" {
+			r.URL.Path == t.config.MCPEndpoint+"/debug" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -224,13 +218,14 @@ func (t *HTTPTransport) handleServiceDiscovery(w http.ResponseWriter, r *http.Re
 		baseURL = fmt.Sprintf("%s://%s", scheme, r.Host)
 	}
 
-	// Minimal service discovery to avoid information disclosure
+	// Service discovery for Streamable HTTP transport (MCP 2025-03-26)
 	discovery := map[string]interface{}{
-		"service":   "mcp-server", // Generic service name
-		"transport": "HTTP+SSE",
+		"service":         "mcp-server",
+		"protocol":        "MCP",
+		"protocolVersion": "2025-03-26",
+		"transport":       "streamable-http",
 		"endpoints": map[string]string{
-			"sse":     baseURL + t.config.SSEEndpoint,
-			"message": baseURL + t.config.MsgEndpoint,
+			"mcp": baseURL + t.config.MCPEndpoint,
 		},
 		"capabilities": map[string]interface{}{
 			"tools":   true,
@@ -331,45 +326,32 @@ func (t *HTTPTransport) handleLive(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSSEDebug provides debug information for SSE endpoint
-func (t *HTTPTransport) handleSSEDebug(w http.ResponseWriter, r *http.Request) {
+// handleMCPDebug provides debug information for MCP endpoint
+func (t *HTTPTransport) handleMCPDebug(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	debug := map[string]interface{}{
-		"endpoint":    t.config.SSEEndpoint,
-		"description": "Server-Sent Events endpoint for MCP communication",
-		"usage":       "Connect with Accept: text/event-stream header",
-		"transport":   "HTTP+SSE",
+		"endpoint":        t.config.MCPEndpoint,
+		"description":     "Streamable HTTP endpoint for MCP communication (2025-03-26 spec)",
+		"protocol":        "MCP",
+		"protocolVersion": "2025-03-26",
+		"transport":       "streamable-http",
+		"methods": map[string]string{
+			"GET":    "SSE stream for server→client messages",
+			"POST":   "JSON-RPC messages (client→server)",
+			"DELETE": "Session termination",
+		},
+		"headers": map[string]string{
+			"Mcp-Session-Id": "Session identifier (returned on initialize, required for subsequent requests)",
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(debug); err != nil {
-		t.logger.Error("failed to encode SSE debug response", "error", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-}
-
-// handleMessageDebug provides debug information for message endpoint
-func (t *HTTPTransport) handleMessageDebug(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	debug := map[string]interface{}{
-		"endpoint":    t.config.MsgEndpoint,
-		"description": "JSON-RPC message endpoint for MCP communication",
-		"usage":       "POST JSON-RPC messages with sessionId query parameter",
-		"transport":   "HTTP+SSE",
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(debug); err != nil {
-		t.logger.Error("failed to encode message debug response", "error", err)
+		t.logger.Error("failed to encode MCP debug response", "error", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -404,6 +386,11 @@ func (t *HTTPTransport) Start() error {
 			WithGuidance("The HTTP transport is already running. Stop it before starting again.")
 	}
 
+	// Set transport info for health monitoring
+	if t.healthChecker != nil {
+		t.healthChecker.SetTransport("http_streaming", t.config.Addr)
+	}
+
 	// Apply middleware in the correct order
 	handler := http.Handler(t.mux)
 	handler = TracingMiddleware()(handler) // Add tracing first to capture all requests
@@ -429,27 +416,27 @@ func (t *HTTPTransport) Start() error {
 
 	// Check if TLS is configured
 	if t.config.TLSCertFile != "" && t.config.TLSKeyFile != "" {
-		t.logger.Info("starting HTTPS transport",
+		t.logger.Info("starting Streamable HTTPS transport",
 			"addr", t.config.Addr,
-			"sse_endpoint", t.config.SSEEndpoint,
-			"message_endpoint", t.config.MsgEndpoint,
+			"mcp_endpoint", t.config.MCPEndpoint,
 			"auth_type", t.config.AuthType,
 			"base_url", t.config.BaseURL,
 			"tls_enabled", true,
-			"force_https", t.config.ForceHTTPS)
+			"force_https", t.config.ForceHTTPS,
+			"protocol_version", "2025-03-26")
 
 		t.mu.Unlock() // Release lock before blocking call
 		return t.httpSrv.ListenAndServeTLS(t.config.TLSCertFile, t.config.TLSKeyFile)
 	}
 
-	t.logger.Info("starting HTTP transport",
+	t.logger.Info("starting Streamable HTTP transport",
 		"addr", t.config.Addr,
-		"sse_endpoint", t.config.SSEEndpoint,
-		"message_endpoint", t.config.MsgEndpoint,
+		"mcp_endpoint", t.config.MCPEndpoint,
 		"auth_type", t.config.AuthType,
 		"base_url", t.config.BaseURL,
 		"tls_enabled", false,
-		"force_https", t.config.ForceHTTPS)
+		"force_https", t.config.ForceHTTPS,
+		"protocol_version", "2025-03-26")
 
 	if t.config.ForceHTTPS {
 		t.logger.Warn("HTTPS enforcement enabled but no TLS certificates provided - HTTP requests will be redirected")
@@ -468,11 +455,11 @@ func (t *HTTPTransport) Shutdown(ctx context.Context) error {
 		return nil
 	}
 
-	t.logger.Info("shutting down HTTP transport")
+	t.logger.Info("shutting down Streamable HTTP transport")
 
-	// Shutdown SSE server first
-	if err := t.sseServer.Shutdown(ctx); err != nil {
-		t.logger.Error("failed to shutdown SSE server", "error", err)
+	// Shutdown streamable server first
+	if err := t.streamableServer.Shutdown(ctx); err != nil {
+		t.logger.Error("failed to shutdown streamable server", "error", err)
 	}
 
 	// Then shutdown HTTP server

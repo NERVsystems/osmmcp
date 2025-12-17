@@ -19,6 +19,7 @@ type HealthChecker struct {
 	startTime   time.Time
 	mu          sync.RWMutex
 	connections map[string]*ConnStatus
+	transport   *TransportInfo
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
@@ -64,6 +65,27 @@ func (h *HealthChecker) RemoveConnection(name string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	delete(h.connections, name)
+}
+
+// SetTransport updates the transport information
+func (h *HealthChecker) SetTransport(transportType, httpAddr string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.transport = &TransportInfo{
+		Type:     transportType,
+		HTTPAddr: httpAddr,
+	}
+}
+
+// UpdateTransportSessions updates the active session count
+func (h *HealthChecker) UpdateTransportSessions(count int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.transport != nil {
+		h.transport.ActiveSessions = count
+	}
 }
 
 // GetHealth returns the current health status
@@ -118,6 +140,7 @@ func (h *HealthChecker) GetHealth() ServiceHealth {
 		UptimeSeconds: int64(uptime.Seconds()),
 		StartTime:     h.startTime,
 		Connections:   connections,
+		Transport:     h.transport,
 		Metrics: map[string]interface{}{
 			"goroutines":           runtime.NumGoroutine(),
 			"memory_alloc_mb":      m.Alloc / 1024 / 1024,

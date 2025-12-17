@@ -413,8 +413,15 @@ func extractLocations(req mcp.CallToolRequest) ([]struct {
 		Longitude float64 `json:"longitude"`
 	}
 
+	// Get arguments using the SDK helper method
+	args := req.GetArguments()
+	if args == nil {
+		return nil, core.NewError(core.ErrMissingParameter, "no arguments provided").
+			WithGuidance("The locations parameter is required and must be an array of waypoints")
+	}
+
 	// Convert the locations parameter to JSON
-	locationsRaw, ok := req.Params.Arguments["locations"]
+	locationsRaw, ok := args["locations"]
 	if !ok {
 		return nil, core.NewError(core.ErrMissingParameter, "missing required locations parameter").
 			WithGuidance("The locations parameter is required and must be an array of waypoints")

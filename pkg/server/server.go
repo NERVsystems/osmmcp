@@ -279,20 +279,19 @@ func (h *Handler) handleGeocode(w http.ResponseWriter, r *http.Request) (int, er
 	address := q.Get("address")
 	region := q.Get("region")
 
-	req := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
-			Name: "geocode_address",
-			Arguments: map[string]any{
-				"address": address,
-			},
-		},
+	// Build arguments map first
+	args := map[string]any{
+		"address": address,
 	}
 	if region != "" {
-		req.Params.Arguments["region"] = region
+		args["region"] = region
+	}
+
+	req := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "geocode_address",
+			Arguments: args,
+		},
 	}
 
 	result, err := tools.HandleGeocodeAddress(r.Context(), req)
@@ -327,11 +326,7 @@ func (h *Handler) handleGeocode(w http.ResponseWriter, r *http.Request) (int, er
 func (h *Handler) handlePlaces(w http.ResponseWriter, r *http.Request) (int, error) {
 	q := r.URL.Query()
 	req := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Name: "find_nearby_places",
 			Arguments: map[string]any{
 				"latitude":  q.Get("latitude"),
@@ -375,11 +370,7 @@ func (h *Handler) handlePlaces(w http.ResponseWriter, r *http.Request) (int, err
 func (h *Handler) handleRoute(w http.ResponseWriter, r *http.Request) (int, error) {
 	q := r.URL.Query()
 	req := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Name: "route_fetch",
 			Arguments: map[string]any{
 				"start": map[string]any{

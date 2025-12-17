@@ -141,6 +141,13 @@ var (
 	)
 )
 
+// TransportInfo holds transport configuration and status
+type TransportInfo struct {
+	Type           string `json:"type"`                      // "http_streaming" or "stdio"
+	HTTPAddr       string `json:"http_addr,omitempty"`       // HTTP address if enabled
+	ActiveSessions int    `json:"active_sessions,omitempty"` // Active streaming sessions
+}
+
 // Service health and info structures
 type ServiceHealth struct {
 	Service       string                 `json:"service"`
@@ -150,7 +157,8 @@ type ServiceHealth struct {
 	UptimeSeconds int64                  `json:"uptime_seconds"`       // Uptime in seconds for spec compliance
 	StartTime     time.Time              `json:"start_time,omitempty"` // Optional field
 	Connections   map[string]ConnStatus  `json:"connections"`
-	Metrics       map[string]interface{} `json:"metrics,omitempty"` // Optional field
+	Metrics       map[string]interface{} `json:"metrics,omitempty"`   // Optional field
+	Transport     *TransportInfo         `json:"transport,omitempty"` // Transport info for monitoring
 }
 
 type ConnStatus struct {

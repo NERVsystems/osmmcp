@@ -67,7 +67,12 @@ func AnalyzeCommuteTool() mcp.Tool {
 // ParseArray extracts an array parameter from a CallToolRequest
 func ParseArray(req mcp.CallToolRequest, paramName string) ([]interface{}, error) {
 	// Check if parameter exists
-	param, ok := req.Params.Arguments[paramName]
+	args := req.GetArguments()
+	if args == nil {
+		return nil, core.NewError(core.ErrMissingParameter, "no arguments provided").
+			WithGuidance("Ensure all required parameters are provided in the request")
+	}
+	param, ok := args[paramName]
 	if !ok {
 		return nil, core.NewError(core.ErrMissingParameter, fmt.Sprintf("parameter %s not found", paramName)).
 			WithGuidance("Ensure all required parameters are provided in the request")

@@ -72,7 +72,8 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 	// Detect which response format to use based on request name
 	toolName := req.Params.Name
 
-	if toolName == "get_map_tile" || req.Params.Arguments["format"] == "json" {
+	args := req.GetArguments()
+	if toolName == "get_map_tile" || (args != nil && args["format"] == "json") {
 		// Return JSON format for test_maptile.go compatibility
 		response := struct {
 			Tile struct {
