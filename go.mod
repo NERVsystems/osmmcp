@@ -7,7 +7,7 @@ toolchain go1.24.5
 require (
 	github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/mark3labs/mcp-go v0.40.0
+	github.com/mark3labs/mcp-go v0.43.2
 	github.com/prometheus/client_golang v1.22.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.37.0
