@@ -115,7 +115,7 @@ jobs:
         sha256sum osmmcp-linux-amd64-v$VERSION.tar.gz osmmcp-linux-arm64-v$VERSION.tar.gz osmmcp-darwin-amd64-v$VERSION.tar.gz osmmcp-darwin-arm64-v$VERSION.tar.gz osmmcp-windows-amd64-v$VERSION.zip osmmcp-windows-arm64-v$VERSION.zip > SHA256SUMS.txt
 
     - name: Create Release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: |
           dist/osmmcp-linux-amd64-v${{ env.VERSION }}.tar.gz
