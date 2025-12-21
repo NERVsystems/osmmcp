@@ -85,11 +85,7 @@ func TestHandleGeocodeAddress(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "geocode_address",
 					Arguments: map[string]any{
 						"address": tt.address,
@@ -253,11 +249,7 @@ func TestHandleReverseGeocode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "reverse_geocode",
 					Arguments: map[string]any{
 						"latitude":  tt.latitude,
@@ -391,11 +383,7 @@ func TestParentheticalHandling(t *testing.T) {
 
 	// Create test request with the test query for Merlion Park
 	req := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Name: "geocode_address",
 			Arguments: map[string]any{
 				"address": "Merlion Park (Singapore)",

@@ -23,8 +23,7 @@ func TestHTTPTransport_ServiceDiscovery(t *testing.T) {
 		Addr:        ":0",
 		BaseURL:     "http://localhost:8080",
 		AuthType:    "none",
-		SSEEndpoint: "/sse",
-		MsgEndpoint: "/message",
+		MCPEndpoint: "/mcp",
 	}
 
 	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
@@ -244,8 +243,7 @@ func TestHTTPTransport_Authentication_Bearer(t *testing.T) {
 		Addr:        ":0",
 		AuthType:    "bearer",
 		AuthToken:   "test-token",
-		SSEEndpoint: "/sse",
-		MsgEndpoint: "/message",
+		MCPEndpoint: "/mcp",
 	}
 
 	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))

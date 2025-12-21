@@ -156,11 +156,7 @@ func TestHandleFilterTags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "filter_tags",
 					Arguments: map[string]any{
 						"elements": tt.elements,
@@ -310,11 +306,7 @@ func TestHandleSortByDistance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "sort_by_distance",
 					Arguments: map[string]any{
 						"elements": tt.elements,
@@ -456,11 +448,7 @@ func TestHandleOSMQueryBBox_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "osm_query_bbox",
 					Arguments: map[string]any{
 						"bbox": tt.bbox,

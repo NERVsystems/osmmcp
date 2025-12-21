@@ -46,11 +46,7 @@ func TestHandlePolylineDecode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "polyline_decode",
 					Arguments: map[string]any{
 						"polyline": tt.polyline,
@@ -124,11 +120,7 @@ func TestHandlePolylineEncode(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "polyline_encode",
 					Arguments: map[string]any{
 						"points": tt.points,

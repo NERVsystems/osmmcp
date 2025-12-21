@@ -52,11 +52,7 @@ func TestHandleGeoDistance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "geo_distance",
 					Arguments: map[string]any{
 						"from": tt.from,
@@ -138,11 +134,7 @@ func TestHandleBBoxFromPoints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "bbox_from_points",
 					Arguments: map[string]any{
 						"points": tt.points,
@@ -221,11 +213,7 @@ func TestHandleCentroidPoints(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test request
 			req := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Name: "centroid_points",
 					Arguments: map[string]any{
 						"points": tt.points,

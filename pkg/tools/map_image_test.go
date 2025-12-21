@@ -9,11 +9,7 @@ import (
 
 func TestHandleGetMapImage(t *testing.T) {
 	req := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Name: "get_map_image",
 			Arguments: map[string]any{
 				"latitude":  37.7749,
