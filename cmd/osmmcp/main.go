@@ -36,6 +36,7 @@ var (
 
 	// HTTP transport flags
 	enableHTTP    bool
+	httpOnly      bool
 	httpAddr      string
 	httpBaseURL   string
 	httpAuthType  string
@@ -72,6 +73,7 @@ func init() {
 	// NERV Systems MCP servers. Other servers (takmcp, aismcp, qgismcp) should adopt this pattern.
 	// See MCP_SERVER_AUDIT.md for details.
 	flag.BoolVar(&enableHTTP, "enable-http", false, "Enable HTTP+SSE transport (in addition to stdio)")
+	flag.BoolVar(&httpOnly, "http-only", false, "Run HTTP transport only, skip stdio (requires --enable-http)")
 	flag.StringVar(&httpAddr, "http-addr", ":7082", "HTTP server address")
 	flag.StringVar(&httpBaseURL, "http-base-url", "", "Base URL for HTTP transport (auto-detected if empty)")
 	flag.StringVar(&httpAuthType, "http-auth-type", "none", "HTTP authentication type: none, bearer, basic")
@@ -339,7 +341,8 @@ func main() {
 
 	// Transport startup logic:
 	// - If HTTP is NOT enabled: Run stdio on main thread (blocking) - default behavior
-	// - If HTTP IS enabled: Run stdio in goroutine (non-blocking), then wait for shutdown
+	// - If HTTP IS enabled and httpOnly is false: Run stdio in goroutine (non-blocking), then wait for shutdown
+	// - If HTTP IS enabled and httpOnly is true: Skip stdio, just wait for shutdown
 	if !enableHTTP {
 		// STDIO-only mode (default) - run blocking on main thread
 		fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server (blocking)\n")
@@ -348,8 +351,14 @@ func main() {
 			logger.Error("server error", "error", err)
 			os.Exit(1)
 		}
+	} else if httpOnly {
+		// HTTP-only mode - skip stdio transport entirely
+		fmt.Fprintf(os.Stderr, "DEBUG: HTTP-only mode, skipping stdio transport\n")
+		logger.Info("server_ready", "transports", []string{"http"}, "http_only", true)
+		<-ctx.Done()
+		logger.Info("shutdown signal received")
 	} else {
-		// HTTP enabled - run stdio in goroutine so both transports work
+		// HTTP enabled with stdio - run stdio in goroutine so both transports work
 		go func() {
 			fmt.Fprintf(os.Stderr, "DEBUG: Starting stdio MCP server (background)\n")
 			logger.Info("transport_enabled", "type", "stdio", "mode", "background")

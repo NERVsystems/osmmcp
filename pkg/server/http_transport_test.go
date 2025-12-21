@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -97,184 +96,23 @@ func TestHTTPTransport_HealthEndpoint(t *testing.T) {
 }
 
 func TestHTTPTransport_MessageEndpoint_404Fix(t *testing.T) {
-	// This test specifically addresses the bug where POST /message returned 404
-	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
-	config := DefaultHTTPTransportConfig()
-	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
-
-	server := httptest.NewServer(transport.mux)
-	defer server.Close()
-
-	// Test POST /message without sessionId
-	resp, err := http.Post(server.URL+"/message", "application/json",
-		strings.NewReader(`{"jsonrpc":"2.0","method":"initialize","id":1}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Should return 400 (Bad Request with JSON-RPC error), NOT 404
-	if resp.StatusCode == http.StatusNotFound {
-		t.Error("POST /message returned 404 - the bug is still present!")
-	}
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", resp.StatusCode)
-	}
-
-	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-
-	// Should be a proper JSON-RPC error
-	if response["jsonrpc"] != "2.0" {
-		t.Error("Response should be JSON-RPC 2.0")
-	}
-
-	if response["error"] == nil {
-		t.Error("Response should contain an error")
-	}
+	// Skip: In MCP SDK v0.40.0+, /message endpoint is replaced by POST to /mcp
+	t.Skip("Skipping: streamable-http transport uses POST /mcp instead of /message")
 }
 
 func TestHTTPTransport_MessageEndpoint_WithInvalidSession(t *testing.T) {
-	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
-	config := DefaultHTTPTransportConfig()
-	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
-
-	server := httptest.NewServer(transport.mux)
-	defer server.Close()
-
-	// Test POST /message with invalid sessionId
-	resp, err := http.Post(server.URL+"/message?sessionId=invalid-session", "application/json",
-		strings.NewReader(`{"jsonrpc":"2.0","method":"initialize","id":1}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	// Should return 400 (Bad Request), NOT 404
-	if resp.StatusCode == http.StatusNotFound {
-		t.Error("POST /message?sessionId=invalid returned 404 - the bug is still present!")
-	}
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", resp.StatusCode)
-	}
-
-	var response map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		t.Fatal(err)
-	}
-
-	// Should be a proper JSON-RPC error for invalid session
-	if response["jsonrpc"] != "2.0" {
-		t.Error("Response should be JSON-RPC 2.0")
-	}
-
-	errorObj, ok := response["error"].(map[string]interface{})
-	if !ok {
-		t.Fatal("Response should contain an error object")
-	}
-
-	if !strings.Contains(errorObj["message"].(string), "Invalid session") {
-		t.Error("Error message should mention invalid session")
-	}
+	// Skip: In MCP SDK v0.40.0+, /message endpoint is replaced by POST to /mcp
+	t.Skip("Skipping: streamable-http transport uses POST /mcp instead of /message")
 }
 
 func TestHTTPTransport_SSEEndpoint(t *testing.T) {
-	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
-	config := DefaultHTTPTransportConfig()
-	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
-
-	server := httptest.NewServer(transport.mux)
-	defer server.Close()
-
-	// Test SSE endpoint
-	req, err := http.NewRequest("GET", server.URL+"/sse", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", resp.StatusCode)
-	}
-
-	// Check SSE headers
-	if resp.Header.Get("Content-Type") != "text/event-stream" {
-		t.Error("Expected Content-Type: text/event-stream")
-	}
-
-	if resp.Header.Get("Cache-Control") != "no-cache" {
-		t.Error("Expected Cache-Control: no-cache")
-	}
-
-	// Read the initial endpoint event
-	buf := make([]byte, 1024)
-	n, err := resp.Body.Read(buf)
-	if err != nil && err != io.EOF {
-		t.Fatal(err)
-	}
-
-	response := string(buf[:n])
-	if !strings.Contains(response, "event: endpoint") {
-		t.Error("Expected 'event: endpoint' in SSE response")
-	}
-
-	if !strings.Contains(response, "sessionId=") {
-		t.Error("Expected sessionId in SSE endpoint data")
-	}
+	// Skip: In MCP SDK v0.40.0+, /sse endpoint is replaced by GET to /mcp
+	t.Skip("Skipping: streamable-http transport uses GET /mcp for SSE, not /sse")
 }
 
 func TestHTTPTransport_Authentication_Bearer(t *testing.T) {
-	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
-	config := HTTPTransportConfig{
-		Addr:        ":0",
-		AuthType:    "bearer",
-		AuthToken:   "test-token",
-		MCPEndpoint: "/mcp",
-	}
-
-	transport := NewHTTPTransport(mcpSrv, config, slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError})))
-	server := httptest.NewServer(transport.mux)
-	defer server.Close()
-
-	// Test without auth - should fail
-	resp, err := http.Get(server.URL + "/sse")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected status 400 for missing auth, got %d", resp.StatusCode)
-	}
-
-	// Test with correct bearer token - should succeed
-	req, err := http.NewRequest("GET", server.URL+"/sse", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Authorization", "Bearer test-token")
-	req.Header.Set("Accept", "text/event-stream")
-
-	resp2, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp2.Body.Close()
-
-	if resp2.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200 with correct auth, got %d", resp2.StatusCode)
-	}
+	// Skip: In MCP SDK v0.40.0+, auth is tested on /mcp endpoint, not /sse
+	t.Skip("Skipping: streamable-http transport uses /mcp endpoint, not /sse")
 }
 
 func TestHTTPTransport_DebugEndpoints(t *testing.T) {
@@ -285,15 +123,15 @@ func TestHTTPTransport_DebugEndpoints(t *testing.T) {
 	server := httptest.NewServer(transport.mux)
 	defer server.Close()
 
-	// Test SSE debug endpoint
-	resp, err := http.Get(server.URL + "/sse/debug")
+	// Test MCP debug endpoint (streamable-http transport uses /mcp/debug)
+	resp, err := http.Get(server.URL + "/mcp/debug")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200 for SSE debug, got %d", resp.StatusCode)
+		t.Errorf("Expected status 200 for MCP debug, got %d", resp.StatusCode)
 	}
 
 	var debug map[string]interface{}
@@ -301,19 +139,13 @@ func TestHTTPTransport_DebugEndpoints(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if debug["endpoint"] != "/sse" {
-		t.Errorf("Expected endpoint '/sse', got %v", debug["endpoint"])
+	// streamable-http uses /mcp as the single endpoint
+	if debug["endpoint"] != "/mcp" {
+		t.Errorf("Expected endpoint '/mcp', got %v", debug["endpoint"])
 	}
 
-	// Test message debug endpoint
-	resp2, err := http.Get(server.URL + "/message/debug")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp2.Body.Close()
-
-	if resp2.StatusCode != http.StatusOK {
-		t.Errorf("Expected status 200 for message debug, got %d", resp2.StatusCode)
+	if debug["transport"] != "streamable-http" {
+		t.Errorf("Expected transport 'streamable-http', got %v", debug["transport"])
 	}
 }
 
@@ -354,7 +186,7 @@ func TestHTTPTransport_Shutdown(t *testing.T) {
 
 func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 	// This test verifies that our implementation satisfies the requirements
-	// for Anthropic API integration and MCP connector compatibility
+	// for streamable-http transport (MCP 2025-03-26 spec)
 
 	mcpSrv := mcpserver.NewMCPServer("test-server", "1.0.0")
 	config := DefaultHTTPTransportConfig()
@@ -363,7 +195,7 @@ func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 	server := httptest.NewServer(transport.mux)
 	defer server.Close()
 
-	t.Run("ServiceDiscoveryAdvertisesBothEndpoints", func(t *testing.T) {
+	t.Run("ServiceDiscoveryAdvertisesMCPEndpoint", func(t *testing.T) {
 		resp, err := http.Get(server.URL + "/")
 		if err != nil {
 			t.Fatal(err)
@@ -371,59 +203,22 @@ func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 		defer resp.Body.Close()
 
 		var discovery map[string]interface{}
-		json.NewDecoder(resp.Body).Decode(&discovery)
+		if err := json.NewDecoder(resp.Body).Decode(&discovery); err != nil {
+			t.Fatal(err)
+		}
 
-		// Must advertise HTTP+SSE transport
+		// Must advertise streamable-http transport
 		if discovery["transport"] != "streamable-http" {
-			t.Error("Service discovery must advertise 'HTTP+SSE' transport")
+			t.Errorf("Service discovery must advertise 'streamable-http' transport, got %v", discovery["transport"])
 		}
 
-		// Must include both endpoints
-		endpoints := discovery["endpoints"].(map[string]interface{})
-		if endpoints["sse"] == nil {
-			t.Error("Service discovery must include 'sse' endpoint")
+		// Must include mcp endpoint
+		endpoints, ok := discovery["endpoints"].(map[string]interface{})
+		if !ok {
+			t.Fatal("Expected endpoints to be a map")
 		}
-	})
-
-	t.Run("MessageEndpointNotFound404Fixed", func(t *testing.T) {
-		// Critical bug fix validation: POST /message must NOT return 404
-		resp, err := http.Post(server.URL+"/message", "application/json",
-			strings.NewReader(`{"jsonrpc":"2.0","method":"initialize","id":1}`))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusNotFound {
-			t.Fatal("CRITICAL BUG: POST /message still returns 404 - dual transport is broken")
-		}
-
-		// Should return 400 with proper JSON-RPC error
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("Expected 400, got %d", resp.StatusCode)
-		}
-	})
-
-	t.Run("SSEHandshakeIncludesSessionID", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", server.URL+"/sse", nil)
-		req.Header.Set("Accept", "text/event-stream")
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-
-		buf := make([]byte, 512)
-		n, _ := resp.Body.Read(buf)
-		response := string(buf[:n])
-
-		if !strings.Contains(response, "sessionId=") {
-			t.Error("SSE handshake must include sessionId in endpoint event")
-		}
-
-		if !strings.Contains(response, "/message?sessionId=") {
-			t.Error("SSE handshake must advertise message endpoint with sessionId")
+		if endpoints["mcp"] == nil {
+			t.Error("Service discovery must include 'mcp' endpoint")
 		}
 	})
 }
