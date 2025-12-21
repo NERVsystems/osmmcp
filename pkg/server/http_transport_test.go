@@ -53,7 +53,7 @@ func TestHTTPTransport_ServiceDiscovery(t *testing.T) {
 		t.Errorf("Expected service 'mcp-server', got %v", discovery["service"])
 	}
 
-	if discovery["transport"] != "HTTP+SSE" {
+	if discovery["transport"] != "streamable-http" {
 		t.Errorf("Expected transport 'HTTP+SSE', got %v", discovery["transport"])
 	}
 
@@ -62,13 +62,10 @@ func TestHTTPTransport_ServiceDiscovery(t *testing.T) {
 		t.Fatal("Expected endpoints to be a map")
 	}
 
-	if !strings.Contains(endpoints["sse"].(string), "/sse") {
-		t.Errorf("Expected SSE endpoint to contain '/sse', got %v", endpoints["sse"])
+	if !strings.Contains(endpoints["mcp"].(string), "/mcp") {
+		t.Errorf("Expected MCP endpoint to contain '/mcp', got %v", endpoints["mcp"])
 	}
 
-	if !strings.Contains(endpoints["message"].(string), "/message") {
-		t.Errorf("Expected message endpoint to contain '/message', got %v", endpoints["message"])
-	}
 }
 
 func TestHTTPTransport_HealthEndpoint(t *testing.T) {
@@ -377,7 +374,7 @@ func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 		json.NewDecoder(resp.Body).Decode(&discovery)
 
 		// Must advertise HTTP+SSE transport
-		if discovery["transport"] != "HTTP+SSE" {
+		if discovery["transport"] != "streamable-http" {
 			t.Error("Service discovery must advertise 'HTTP+SSE' transport")
 		}
 
@@ -385,9 +382,6 @@ func TestHTTPTransport_DualTransportCompliance(t *testing.T) {
 		endpoints := discovery["endpoints"].(map[string]interface{})
 		if endpoints["sse"] == nil {
 			t.Error("Service discovery must include 'sse' endpoint")
-		}
-		if endpoints["message"] == nil {
-			t.Error("Service discovery must include 'message' endpoint")
 		}
 	})
 

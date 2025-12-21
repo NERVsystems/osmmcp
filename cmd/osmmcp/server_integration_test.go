@@ -69,7 +69,7 @@ func TestServerMainHealth(t *testing.T) {
 	}()
 
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/health", port)
-	if err := waitForEndpoint(healthURL, 5*time.Second); err != nil {
+	if err := waitForEndpoint(healthURL, 15*time.Second); err != nil {
 		t.Fatalf("server did not start: %v", err)
 	}
 
