@@ -370,9 +370,9 @@ func utmToLatLon(zone int, easting, northing float64, isNorthern bool) (lat, lon
 	)
 
 	// Derived constants
-	b := a * (1 - f)                                // Semi-minor axis
-	e2 := (a*a - b*b) / (a * a)                     // First eccentricity squared
-	ep2 := (a*a - b*b) / (b * b)                    // Second eccentricity squared
+	b := a * (1 - f)             // Semi-minor axis
+	e2 := (a*a - b*b) / (a * a)  // First eccentricity squared
+	ep2 := (a*a - b*b) / (b * b) // Second eccentricity squared
 	e1 := (1 - math.Sqrt(1-e2)) / (1 + math.Sqrt(1-e2))
 
 	// Remove false easting and northing
@@ -407,10 +407,9 @@ func utmToLatLon(zone int, easting, northing float64, isNorthern bool) (lat, lon
 	d := x / (n1 * k0)
 
 	// Calculate latitude (in radians)
-	lat = phi1 - (n1*tanPhi1/r1)*(
-		d*d/2-
-			(5+3*t1+10*c1-4*c1*c1-9*ep2)*d*d*d*d/24+
-			(61+90*t1+298*c1+45*t1*t1-252*ep2-3*c1*c1)*d*d*d*d*d*d/720)
+	lat = phi1 - (n1*tanPhi1/r1)*(d*d/2-
+		(5+3*t1+10*c1-4*c1*c1-9*ep2)*d*d*d*d/24+
+		(61+90*t1+298*c1+45*t1*t1-252*ep2-3*c1*c1)*d*d*d*d*d*d/720)
 
 	// Calculate longitude (in radians)
 	lon = lon0 + (d-
