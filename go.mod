@@ -5,6 +5,7 @@ go 1.24.1
 toolchain go1.24.5
 
 require (
+	github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mark3labs/mcp-go v0.40.0
 	github.com/prometheus/client_golang v1.22.0
@@ -14,11 +15,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	golang.org/x/sync v0.16.0
-	golang.org/x/time v0.11.0
+	golang.org/x/time v0.14.0
 )
 
 require (
-	github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
