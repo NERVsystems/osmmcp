@@ -21,7 +21,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o osmmcp ./cmd/osmmcp
 
 # Runtime stage
-FROM alpine:3.19
+FROM alpine:3.23
 
 # Install ca-certificates for HTTPS, curl for health checks
 RUN apk --no-cache add ca-certificates curl && \
