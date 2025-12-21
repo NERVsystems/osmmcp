@@ -19,6 +19,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/NERVsystems/osmmcp/pkg/coords"
 	"github.com/NERVsystems/osmmcp/pkg/core"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 )
@@ -142,10 +143,19 @@ func NewGeocodeDetailedError(code, message string, query string, suggestions ...
 // GeocodeAddressTool returns a tool definition for geocoding addresses
 func GeocodeAddressTool() mcp.Tool {
 	return mcp.NewTool("geocode_address",
-		mcp.WithDescription("Convert an address or place name to geographic coordinates"),
+		mcp.WithDescription(`Convert an address, place name, or military coordinates to geographic coordinates.
+
+Automatically detects and converts:
+- MGRS (Military Grid Reference System): e.g., "54SVK2747201448", "18SUJ23370651"
+- UTM (Universal Transverse Mercator): e.g., "47N 485986 2197460"
+- DMS (Degrees Minutes Seconds): e.g., "19°51'22"N 99°48'59"E"
+- Place names and street addresses
+
+For MGRS/UTM/DMS coordinates, returns precise lat/lon directly without external lookup.
+Essential for tactical/military coordinate handling.`),
 		mcp.WithString("address",
 			mcp.Required(),
-			mcp.Description("The address or place name to geocode. For best results, format addresses clearly without parentheses and include city/country information for locations outside the US. For international or tourist sites, include the region or country name. Example: 'Merlion Park Singapore' instead of 'Merlion Park (Singapore)'."),
+			mcp.Description("The address, place name, or coordinate to geocode. Accepts MGRS (e.g., '54SVK2747201448'), UTM (e.g., '47N 485986 2197460'), DMS, or place names. For addresses, include city/country for best results."),
 		),
 		mcp.WithString("region",
 			mcp.Description("Optional region context to improve results for ambiguous queries (e.g., 'Singapore'). Will be automatically appended to short queries."),
@@ -401,6 +411,15 @@ func resultsToPlaces(results []NominatimResult) ([]Place, error) {
 
 // HandleGeocodeAddress implements the geocoding functionality
 //
+// This function automatically detects and converts coordinate formats:
+// - MGRS (Military Grid Reference System): e.g., "47QNB8598697460"
+// - UTM (Universal Transverse Mercator): e.g., "47N 500000 2200000"
+// - DMS (Degrees Minutes Seconds): e.g., "19°51'22"N 99°48'59"E"
+// - Decimal degrees: e.g., "19.856, 99.817"
+//
+// If the input is a coordinate, it returns the location directly.
+// If the input is a place name/address, it queries Nominatim.
+//
 // Side-effects: performs up to four HTTP GET requests (first + three retries),
 // respects a 512-entry shared LRU cache, and annotates each outbound request
 // with a descriptive User-Agent header.
@@ -422,6 +441,54 @@ func HandleGeocodeAddress(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 			"Provide a specific address or place name",
 			"Include city/region for better results",
 		), nil
+	}
+
+	// Check if input is a coordinate format (MGRS, UTM, DMS, decimal)
+	// If so, convert directly without calling Nominatim
+	if coords.IsCoordinate(address) {
+		result, err := coords.Parse(address)
+		if err != nil {
+			logger.Warn("coordinate detection matched but parse failed",
+				"input", address,
+				"error", err)
+			// Fall through to Nominatim geocoding
+		} else {
+			logger.Info("coordinate format detected and converted",
+				"input", address,
+				"format", result.Format.String(),
+				"lat", result.Location.Latitude,
+				"lon", result.Location.Longitude)
+
+			// Create output with the converted coordinates
+			place := Place{
+				ID:   fmt.Sprintf("coord-%s", result.Format.String()),
+				Name: fmt.Sprintf("Coordinates (%s format)", result.Format.String()),
+				Location: Location{
+					Latitude:  result.Location.Latitude,
+					Longitude: result.Location.Longitude,
+				},
+				Address: Address{
+					Formatted: fmt.Sprintf("%.6f, %.6f", result.Location.Latitude, result.Location.Longitude),
+				},
+				Importance: 1.0, // Coordinates are exact matches
+			}
+
+			output := GeocodeAddressOutput{
+				Place:      place,
+				Candidates: []Place{place},
+			}
+
+			resultBytes, err := json.Marshal(output)
+			if err != nil {
+				return NewGeocodeDetailedError(
+					"RESULT_ERROR",
+					"Failed to generate result",
+					address,
+				), nil
+			}
+
+			return mcp.NewToolResultText(string(resultBytes)), nil
+		}
 	}
 
 	// Sanitize the address to improve search results

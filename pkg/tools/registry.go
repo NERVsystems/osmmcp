@@ -55,7 +55,7 @@ func (r *Registry) GetToolDefinitions() []ToolDefinition {
 		// Geocoding tools
 		{
 			Name:        "geocode_address",
-			Description: "Convert a text address to geographic coordinates. Parameters: address (string), region (optional string)",
+			Description: "Convert address, place name, or military coordinates (MGRS, UTM, DMS) to lat/lon. Essential for tactical coordinate handling.",
 			Tool:        GeocodeAddressTool(),
 			Handler:     HandleGeocodeAddress,
 		},

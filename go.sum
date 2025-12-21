@@ -1,3 +1,5 @@
+github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494 h1:T9kKRxxcpX7sJ3cd/IWOv1yQ7g+Iucjqvxzd3AjmHwY=
+github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494/go.mod h1:DUTInKPPjUC8nQqJVVzW/EZLlGVlogOdHG3DAmorBXI=
 github.com/bahlo/generic-list-go v0.2.0 h1:5sz/EEAK+ls5wF+NeqDpk5+iNdMDXrh3z3nPnH1Wvgk=
 github.com/bahlo/generic-list-go v0.2.0/go.mod h1:2KvAjgMlE5NNynlg/5iLrrCCZ2+5xWbdbCW3pNTGyYg=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
