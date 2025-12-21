@@ -5,6 +5,7 @@ go 1.24.1
 toolchain go1.24.5
 
 require (
+	github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mark3labs/mcp-go v0.40.0
 	github.com/prometheus/client_golang v1.22.0
@@ -18,7 +19,6 @@ require (
 )
 
 require (
-	github.com/akhenakh/mgrs v0.0.0-20250412181015-7c7a2a77f494 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
