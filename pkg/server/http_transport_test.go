@@ -64,7 +64,6 @@ func TestHTTPTransport_ServiceDiscovery(t *testing.T) {
 	if !strings.Contains(endpoints["mcp"].(string), "/mcp") {
 		t.Errorf("Expected MCP endpoint to contain '/mcp', got %v", endpoints["mcp"])
 	}
-
 }
 
 func TestHTTPTransport_HealthEndpoint(t *testing.T) {
