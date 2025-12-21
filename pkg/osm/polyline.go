@@ -90,6 +90,12 @@ func EncodePolyline(points []geo.Location) string {
 		return ""
 	}
 
+	// Check for potential overflow in size calculation
+	const maxPoints = (1 << 30) / 6 // ~178 million points max
+	if len(points) > maxPoints {
+		points = points[:maxPoints] // Truncate to safe size
+	}
+
 	// Estimate result size (6 bytes per point is common)
 	result := make([]byte, 0, len(points)*6)
 
