@@ -18,8 +18,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/akhenakh/mgrs"
+
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 )
 
 // Format represents a coordinate format type
@@ -36,6 +37,8 @@ const (
 // String returns the format name
 func (f Format) String() string {
 	switch f {
+	case FormatUnknown:
+		return "unknown"
 	case FormatDecimal:
 		return "decimal"
 	case FormatDMS:
@@ -44,9 +47,8 @@ func (f Format) String() string {
 		return "mgrs"
 	case FormatUTM:
 		return "utm"
-	default:
-		return "unknown"
 	}
+	return "unknown"
 }
 
 // ParseResult contains the parsed coordinate and metadata
