@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.22', '1.24']
+        go-version: ['1.24']  # mgrs library requires Go 1.24+
     
     steps:
     - uses: actions/checkout@v4
