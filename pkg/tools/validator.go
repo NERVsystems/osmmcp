@@ -94,13 +94,13 @@ func ValidateOSMParameters(req mcp.CallToolRequest, toolName string, logger *slo
 	}
 
 	// Validate radius range
-	if err := ValidateRadius(radius, 5000); err != nil {
+	if err := ValidateRadius(radius, 50000); err != nil {
 		logger.Error("radius validation failed", "radius", radius, "error", err)
 		return 0, 0, 0, 0, NewGeocodeDetailedError(
 			"INVALID_RADIUS",
 			err.Error(),
 			"",
-			"Radius must be positive and less than 5000 meters",
+			"Radius must be positive and less than 50000 meters",
 		), fmt.Errorf("invalid radius range")
 	}
 

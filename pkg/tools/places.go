@@ -31,7 +31,7 @@ func FindNearbyPlacesTool() mcp.Tool {
 			mcp.Description("The longitude coordinate of the center point"),
 		),
 		mcp.WithNumber("radius",
-			mcp.Description("Search radius in meters (max 10000)"),
+			mcp.Description("Search radius in meters (max 50000)"),
 			mcp.DefaultNumber(1000),
 		),
 		mcp.WithString("category",
