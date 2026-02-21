@@ -15,6 +15,7 @@ import (
 
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/core"
+	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 )
 
@@ -135,6 +136,19 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		logger.Error("failed to decode polyline or empty result")
 		return core.NewError("PARSE_ERROR",
 			"Failed to decode route geometry").ToMCPResult(), nil
+	}
+
+	// Simplify the polyline to reduce coordinate count.
+	// LLMs truncate large arrays when passing tool results between calls.
+	// 839 coords -> ~100 preserves route shape while staying within LLM output limits.
+	const maxRoutePoints = 100
+	if len(polylinePoints) > maxRoutePoints {
+		logger.Debug("simplifying route geometry",
+			"original_points", len(polylinePoints),
+			"max_points", maxRoutePoints)
+		polylinePoints = simplifyPolyline(polylinePoints, maxRoutePoints)
+		logger.Debug("simplified route geometry",
+			"simplified_points", len(polylinePoints))
 	}
 
 	// Convert coordinates to the expected format
@@ -453,6 +467,94 @@ func mapModeToProfile(mode string) string {
 	default:
 		return "car" // Default to car
 	}
+}
+
+// simplifyPolyline reduces the number of points in a polyline using
+// the Ramer-Douglas-Peucker algorithm with adaptive epsilon.
+// It preserves the first and last points and keeps the most visually
+// significant intermediate points.
+func simplifyPolyline(points []geo.Location, maxPoints int) []geo.Location {
+	if len(points) <= maxPoints {
+		return points
+	}
+
+	// Binary search for the right epsilon that gives us <= maxPoints
+	// Start with a small epsilon and increase
+	epsilon := 0.00001 // ~1m at equator
+	for {
+		result := douglasPeucker(points, epsilon)
+		if len(result) <= maxPoints {
+			return result
+		}
+		epsilon *= 2
+		// Safety: if epsilon gets absurdly large, fall back to uniform sampling
+		if epsilon > 1.0 {
+			return uniformSample(points, maxPoints)
+		}
+	}
+}
+
+// douglasPeucker implements the Ramer-Douglas-Peucker line simplification algorithm.
+func douglasPeucker(points []geo.Location, epsilon float64) []geo.Location {
+	if len(points) <= 2 {
+		return points
+	}
+
+	// Find the point with maximum distance from the line segment
+	maxDist := 0.0
+	maxIdx := 0
+	for i := 1; i < len(points)-1; i++ {
+		d := perpendicularDistance(points[i], points[0], points[len(points)-1])
+		if d > maxDist {
+			maxDist = d
+			maxIdx = i
+		}
+	}
+
+	// If max distance exceeds epsilon, recursively simplify
+	if maxDist > epsilon {
+		left := douglasPeucker(points[:maxIdx+1], epsilon)
+		right := douglasPeucker(points[maxIdx:], epsilon)
+		// Combine, avoiding duplicate of the split point
+		return append(left[:len(left)-1], right...)
+	}
+
+	// All points are within epsilon; keep only endpoints
+	return []geo.Location{points[0], points[len(points)-1]}
+}
+
+// perpendicularDistance calculates the perpendicular distance from a point
+// to a line segment defined by two endpoints, using geographic coordinates.
+func perpendicularDistance(point, lineStart, lineEnd geo.Location) float64 {
+	dx := lineEnd.Longitude - lineStart.Longitude
+	dy := lineEnd.Latitude - lineStart.Latitude
+
+	// If line segment is a point, return distance to that point
+	if dx == 0 && dy == 0 {
+		px := point.Longitude - lineStart.Longitude
+		py := point.Latitude - lineStart.Latitude
+		return math.Sqrt(px*px + py*py)
+	}
+
+	// Calculate perpendicular distance using cross product
+	num := math.Abs(dy*point.Longitude - dx*point.Latitude + lineEnd.Longitude*lineStart.Latitude - lineEnd.Latitude*lineStart.Longitude)
+	den := math.Sqrt(dx*dx + dy*dy)
+	return num / den
+}
+
+// uniformSample takes every N-th point, always keeping first and last.
+func uniformSample(points []geo.Location, maxPoints int) []geo.Location {
+	if len(points) <= maxPoints {
+		return points
+	}
+	result := make([]geo.Location, 0, maxPoints)
+	step := float64(len(points)-1) / float64(maxPoints-1)
+	for i := 0; i < maxPoints-1; i++ {
+		idx := int(math.Round(float64(i) * step))
+		result = append(result, points[idx])
+	}
+	result = append(result, points[len(points)-1])
+	return result
 }
 
 // generateInstruction creates a human-readable instruction from OSRM maneuver
