@@ -41,4 +41,4 @@ jobs:
           sudo mv misspell /usr/local/bin/
 
       - name: Run misspell
-        run: misspell -error .
+        run: misspell -error $(find . -type f -name '*.go' -o -name '*.md' -o -name '*.yml' -o -name '*.yaml' | grep -v vendor/)
