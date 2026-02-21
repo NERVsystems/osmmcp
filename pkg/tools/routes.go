@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -15,7 +17,6 @@ import (
 
 	"github.com/NERVsystems/osmmcp/pkg/cache"
 	"github.com/NERVsystems/osmmcp/pkg/core"
-	"github.com/NERVsystems/osmmcp/pkg/geo"
 	"github.com/NERVsystems/osmmcp/pkg/osm"
 )
 
@@ -138,23 +139,24 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 			"Failed to decode route geometry").ToMCPResult(), nil
 	}
 
-	// Simplify the polyline to reduce coordinate count.
-	// LLMs truncate large arrays when passing tool results between calls.
-	// 839 coords -> ~100 preserves route shape while staying within LLM output limits.
-	const maxRoutePoints = 100
-	if len(polylinePoints) > maxRoutePoints {
-		logger.Debug("simplifying route geometry",
-			"original_points", len(polylinePoints),
-			"max_points", maxRoutePoints)
-		polylinePoints = simplifyPolyline(polylinePoints, maxRoutePoints)
-		logger.Debug("simplified route geometry",
-			"simplified_points", len(polylinePoints))
-	}
-
 	// Convert coordinates to the expected format
 	coordinatesArrays := make([][]float64, len(polylinePoints))
 	for i, point := range polylinePoints {
 		coordinatesArrays[i] = []float64{point.Longitude, point.Latitude}
+	}
+
+	// Write full coordinates to a temp file so downstream tools (create_route)
+	// can read them directly, bypassing the LLM which garbles large arrays.
+	var routeFile string
+	if len(coordinatesArrays) > 0 {
+		routeFile, err = writeRouteFile(coordinatesArrays)
+		if err != nil {
+			logger.Warn("failed to write route file, coordinates will be inline only", "error", err)
+		} else {
+			logger.Debug("wrote route geometry file",
+				"path", routeFile,
+				"points", len(coordinatesArrays))
+		}
 	}
 
 	// Build the route segments
@@ -183,7 +185,9 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 	}
 
-	// Create route directions response
+	// Create route directions response.
+	// Coordinates are written to route_file for direct consumption by create_route.
+	// Only include a small summary (first + last coord) inline for the LLM.
 	directions := RouteDirections{
 		Distance: bestRoute.Distance,
 		Duration: bestRoute.Duration,
@@ -196,14 +200,18 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 			Longitude: endLon,
 		},
 		Segments:    segments,
-		Coordinates: coordinatesArrays,
+		Coordinates: nil, // Omit full array — LLMs garble large coordinate arrays
 	}
 
-	// Create output
+	// Create output with route_file for create_route to consume directly
 	output := struct {
 		Directions RouteDirections `json:"directions"`
+		RouteFile  string          `json:"route_file,omitempty"`
+		PointCount int             `json:"point_count"`
 	}{
 		Directions: directions,
+		RouteFile:  routeFile,
+		PointCount: len(coordinatesArrays),
 	}
 
 	// Marshal to JSON
@@ -469,92 +477,27 @@ func mapModeToProfile(mode string) string {
 	}
 }
 
-// simplifyPolyline reduces the number of points in a polyline using
-// the Ramer-Douglas-Peucker algorithm with adaptive epsilon.
-// It preserves the first and last points and keeps the most visually
-// significant intermediate points.
-func simplifyPolyline(points []geo.Location, maxPoints int) []geo.Location {
-	if len(points) <= maxPoints {
-		return points
+// writeRouteFile writes route coordinates to a temp file as JSON.
+// Returns the file path. The file can be read by create_route to get
+// the full route geometry without the LLM having to relay coordinates.
+func writeRouteFile(coords [][]float64) (string, error) {
+	dir := "/tmp/routes"
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating route dir: %w", err)
 	}
 
-	// Binary search for the right epsilon that gives us <= maxPoints
-	// Start with a small epsilon and increase
-	epsilon := 0.00001 // ~1m at equator
-	for {
-		result := douglasPeucker(points, epsilon)
-		if len(result) <= maxPoints {
-			return result
-		}
-		epsilon *= 2
-		// Safety: if epsilon gets absurdly large, fall back to uniform sampling
-		if epsilon > 1.0 {
-			return uniformSample(points, maxPoints)
-		}
+	f, err := os.CreateTemp(dir, "route-*.json")
+	if err != nil {
+		return "", fmt.Errorf("creating temp file: %w", err)
 	}
-}
+	defer f.Close()
 
-// douglasPeucker implements the Ramer-Douglas-Peucker line simplification algorithm.
-func douglasPeucker(points []geo.Location, epsilon float64) []geo.Location {
-	if len(points) <= 2 {
-		return points
+	if err := json.NewEncoder(f).Encode(coords); err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("encoding coordinates: %w", err)
 	}
 
-	// Find the point with maximum distance from the line segment
-	maxDist := 0.0
-	maxIdx := 0
-	for i := 1; i < len(points)-1; i++ {
-		d := perpendicularDistance(points[i], points[0], points[len(points)-1])
-		if d > maxDist {
-			maxDist = d
-			maxIdx = i
-		}
-	}
-
-	// If max distance exceeds epsilon, recursively simplify
-	if maxDist > epsilon {
-		left := douglasPeucker(points[:maxIdx+1], epsilon)
-		right := douglasPeucker(points[maxIdx:], epsilon)
-		// Combine, avoiding duplicate of the split point
-		return append(left[:len(left)-1], right...)
-	}
-
-	// All points are within epsilon; keep only endpoints
-	return []geo.Location{points[0], points[len(points)-1]}
-}
-
-// perpendicularDistance calculates the perpendicular distance from a point
-// to a line segment defined by two endpoints, using geographic coordinates.
-func perpendicularDistance(point, lineStart, lineEnd geo.Location) float64 {
-	dx := lineEnd.Longitude - lineStart.Longitude
-	dy := lineEnd.Latitude - lineStart.Latitude
-
-	// If line segment is a point, return distance to that point
-	if dx == 0 && dy == 0 {
-		px := point.Longitude - lineStart.Longitude
-		py := point.Latitude - lineStart.Latitude
-		return math.Sqrt(px*px + py*py)
-	}
-
-	// Calculate perpendicular distance using cross product
-	num := math.Abs(dy*point.Longitude - dx*point.Latitude + lineEnd.Longitude*lineStart.Latitude - lineEnd.Latitude*lineStart.Longitude)
-	den := math.Sqrt(dx*dx + dy*dy)
-	return num / den
-}
-
-// uniformSample takes every N-th point, always keeping first and last.
-func uniformSample(points []geo.Location, maxPoints int) []geo.Location {
-	if len(points) <= maxPoints {
-		return points
-	}
-	result := make([]geo.Location, 0, maxPoints)
-	step := float64(len(points)-1) / float64(maxPoints-1)
-	for i := 0; i < maxPoints-1; i++ {
-		idx := int(math.Round(float64(i) * step))
-		result = append(result, points[idx])
-	}
-	result = append(result, points[len(points)-1])
-	return result
+	return filepath.Clean(f.Name()), nil
 }
 
 // generateInstruction creates a human-readable instruction from OSRM maneuver
