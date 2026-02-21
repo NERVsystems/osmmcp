@@ -145,8 +145,18 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		coordinatesArrays[i] = []float64{point.Longitude, point.Latitude}
 	}
 
-	// Write full coordinates to a temp file so downstream tools (create_route)
-	// can read them directly, bypassing the LLM which garbles large arrays.
+	// Downsample long routes to avoid ATAK rendering issues.
+	// 200 points (~300m spacing on a 62km route) renders smoothly.
+	const maxRoutePoints = 200
+	if len(coordinatesArrays) > maxRoutePoints {
+		logger.Debug("downsampling route geometry",
+			"original", len(coordinatesArrays),
+			"target", maxRoutePoints)
+		coordinatesArrays = uniformSample(coordinatesArrays, maxRoutePoints)
+	}
+
+	// Write coordinates to a temp file so downstream tools (create_route)
+	// can read them directly via route_file, bypassing the LLM.
 	var routeFile string
 	if len(coordinatesArrays) > 0 {
 		routeFile, err = writeRouteFile(coordinatesArrays)
@@ -475,6 +485,21 @@ func mapModeToProfile(mode string) string {
 	default:
 		return "car" // Default to car
 	}
+}
+
+// uniformSample takes every N-th coordinate, always keeping first and last.
+func uniformSample(coords [][]float64, maxPoints int) [][]float64 {
+	if len(coords) <= maxPoints {
+		return coords
+	}
+	result := make([][]float64, 0, maxPoints)
+	step := float64(len(coords)-1) / float64(maxPoints-1)
+	for i := 0; i < maxPoints-1; i++ {
+		idx := int(math.Round(float64(i) * step))
+		result = append(result, coords[idx])
+	}
+	result = append(result, coords[len(coords)-1])
+	return result
 }
 
 // writeRouteFile writes route coordinates to a temp file as JSON.
