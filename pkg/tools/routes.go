@@ -195,10 +195,18 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 	}
 
-	// Create route directions response.
-	// Coordinates are written to route_file for direct consumption by create_route.
-	// Only include a small summary (first + last coord) inline for the LLM.
-	directions := RouteDirections{
+	// Create minimal route response — omit segments (turn-by-turn directions)
+	// and coordinates. Each segment adds ~100 chars to conversation history,
+	// compounding on every subsequent API call. The LLM only needs distance,
+	// duration, endpoints, route_file path, and point_count.
+	output := struct {
+		Distance   float64  `json:"distance"`
+		Duration   float64  `json:"duration"`
+		StartPoint Location `json:"start_point"`
+		EndPoint   Location `json:"end_point"`
+		RouteFile  string   `json:"route_file,omitempty"`
+		PointCount int      `json:"point_count"`
+	}{
 		Distance: bestRoute.Distance,
 		Duration: bestRoute.Duration,
 		StartPoint: Location{
@@ -209,17 +217,6 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 			Latitude:  endLat,
 			Longitude: endLon,
 		},
-		Segments:    segments,
-		Coordinates: nil, // Omit full array — LLMs garble large coordinate arrays
-	}
-
-	// Create output with route_file for create_route to consume directly
-	output := struct {
-		Directions RouteDirections `json:"directions"`
-		RouteFile  string          `json:"route_file,omitempty"`
-		PointCount int             `json:"point_count"`
-	}{
-		Directions: directions,
 		RouteFile:  routeFile,
 		PointCount: len(coordinatesArrays),
 	}
