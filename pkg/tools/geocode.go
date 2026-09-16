@@ -48,16 +48,18 @@ const (
 	maxRegionLength  = 100  // Maximum length of region input
 )
 
-// Default region to append for single-token or landmark queries
-// defaultRegion specifies the region appended to single token queries. It can
-// be overridden via the OSMMCP_DEFAULT_REGION environment variable to make the
-// server behavior configurable in different deployments.
-var defaultRegion = func() string {
-	if env := os.Getenv("OSMMCP_DEFAULT_REGION"); env != "" {
-		return env
-	}
-	return "Singapore"
-}()
+// defaultRegion is the region context appended to short queries when the
+// caller supplies none. It is EMPTY unless the deployment opts in via
+// OSMMCP_DEFAULT_REGION, matching the "region" parameter's advertised default
+// ("" in GeocodeAddressTool).
+//
+// It used to default to "Singapore" — a leftover from the Merlion Park
+// development scenario. Because ensureRegion appends the region to any query
+// of fewer than three words with no comma, every terse place name was silently
+// rewritten: "Eiffel Tower" -> "Eiffel Tower Singapore" -> NO_RESULTS. Callers
+// that phrase queries verbosely ("Eiffel Tower, Paris, France") never tripped
+// it, so it presented as an unreliable geocoder rather than a bug.
+var defaultRegion = os.Getenv("OSMMCP_DEFAULT_REGION")
 
 // Global cache and request group to deduplicate in-flight requests
 var (
@@ -233,6 +235,50 @@ func ensureRegion(query, region string) string {
 	}
 
 	return query
+}
+
+// geocodeQuerySequence returns the de-duplicated, ordered list of queries to
+// try against Nominatim for one geocode_address call. Region-augmented forms
+// come first (they disambiguate when the region is right), then the caller's
+// query verbatim.
+//
+// INVARIANT: the address exactly as the caller sent it is always in the list.
+// Region augmentation is a heuristic and must only ever ADD candidates, never
+// replace the one the caller asked for.
+func geocodeQuerySequence(address, withoutParens, parensContent, region string) []string {
+	querySequence := []string{}
+
+	// If we have content outside parentheses, use it with region context
+	if withoutParens != "" && withoutParens != address {
+		querySequence = append(querySequence, ensureRegion(withoutParens, region))
+	}
+
+	// If we have content inside parentheses, use it with region context
+	if parensContent != "" {
+		querySequence = append(querySequence, ensureRegion(parensContent, region))
+	}
+
+	// The full original query with region context
+	querySequence = append(querySequence, ensureRegion(address, region))
+
+	// Last resort: the caller's query VERBATIM, with no region appended, so a
+	// region context that does not match the operating area cannot lose a
+	// result the bare query would have found.
+	querySequence = append(querySequence, address)
+	if withoutParens != "" && withoutParens != address {
+		querySequence = append(querySequence, withoutParens)
+	}
+
+	seen := make(map[string]bool)
+	uniqueQueries := []string{}
+	for _, q := range querySequence {
+		if q == "" || seen[q] {
+			continue
+		}
+		seen[q] = true
+		uniqueQueries = append(uniqueQueries, q)
+	}
+	return uniqueQueries
 }
 
 // cacheKey generates a consistent cache key for a query
@@ -498,32 +544,7 @@ func HandleGeocodeAddress(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 		"without_parens", withoutParens,
 		"parens_content", parensContent)
 
-	// Keep track of the queries we'll try in order
-	querySequence := []string{}
-
-	// First query: If we have content outside parentheses, use it with region context
-	if withoutParens != "" && withoutParens != address {
-		querySequence = append(querySequence, ensureRegion(withoutParens, region))
-	}
-
-	// Second query: If we have content inside parentheses, use it with region context
-	if parensContent != "" {
-		querySequence = append(querySequence, ensureRegion(parensContent, region))
-	}
-
-	// Always include the full original query with region context
-	querySequence = append(querySequence, ensureRegion(address, region))
-
-	// Ensure we have unique queries
-	seen := make(map[string]bool)
-	uniqueQueries := []string{}
-
-	for _, q := range querySequence {
-		if !seen[q] {
-			seen[q] = true
-			uniqueQueries = append(uniqueQueries, q)
-		}
-	}
+	uniqueQueries := geocodeQuerySequence(address, withoutParens, parensContent, region)
 
 	// Try each query in sequence until we get results
 	var allResults []NominatimResult
