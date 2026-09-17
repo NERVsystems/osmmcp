@@ -182,13 +182,12 @@ func (b *OverpassBuilder) Build() string {
 		}
 	}
 
-	// Close element collection and add output directive
-	query.WriteString(");out body;")
-
-	// Add center directive for ways and relations if needed
-	if b.outFormat == "json" {
-		query.WriteString(">;out center;")
-	}
+	// Close element collection and add output directive.
+	// "out center" prints tags plus a computed centre point for ways and
+	// relations. The previous "out body;>;out center;" recursed down to child
+	// nodes first, so "out center" applied to the nodes and ways/relations were
+	// emitted without any coordinates at all.
+	query.WriteString(");out center;")
 
 	return query.String()
 }
@@ -233,29 +232,32 @@ func (b *OverpassBuilder) buildTagFilter(filter TagFilter) string {
 		return fmt.Sprintf("[%s]", filter.Key)
 	}
 
-	// Handle single value case
-	if len(filter.Values) == 1 {
-		// Special case for "*" meaning any value
-		if filter.Values[0] == "*" {
+	// "*" means any value, so it subsumes every other value for this key
+	for _, value := range filter.Values {
+		if value == "*" {
 			if filter.Exclude {
 				return fmt.Sprintf("[!%s]", filter.Key)
 			}
 			return fmt.Sprintf("[%s]", filter.Key)
 		}
+	}
 
-		// Regular value
+	// Handle single value case
+	if len(filter.Values) == 1 {
 		if filter.Exclude {
 			return fmt.Sprintf("[%s!=%s]", filter.Key, filter.Values[0])
 		}
 		return fmt.Sprintf("[%s=%s]", filter.Key, filter.Values[0])
 	}
 
-	// Multiple values using regex
+	// Multiple values are OR-ed via an anchored alternation. Without the anchors
+	// the regex matches substrings, so e.g. [amenity~"bar|cafe"] would also match
+	// amenity=barbecue.
 	values := strings.Join(filter.Values, "|")
 	if filter.Exclude {
-		return fmt.Sprintf("[%s!~\"%s\"]", filter.Key, values)
+		return fmt.Sprintf("[%s!~\"^(%s)$\"]", filter.Key, values)
 	}
-	return fmt.Sprintf("[%s~\"%s\"]", filter.Key, values)
+	return fmt.Sprintf("[%s~\"^(%s)$\"]", filter.Key, values)
 }
 
 // Example usage:

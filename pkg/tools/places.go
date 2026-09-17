@@ -78,13 +78,7 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		WithCenter(lat, lon, radius)
 
 	// Add tag filters if category specified
-	if len(osmTags) > 0 {
-		for key, values := range osmTags {
-			for _, value := range values {
-				queryBuilder.WithTag(key, value)
-			}
-		}
-	}
+	applyCategoryTags(queryBuilder, osmTags)
 
 	// Execute the query using core HTTP utilities
 	overpassQuery := queryBuilder.Build()
@@ -129,10 +123,14 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	// Parse response
 	var overpassResp struct {
 		Elements []struct {
-			ID   int     `json:"id"`
-			Type string  `json:"type"`
-			Lat  float64 `json:"lat"`
-			Lon  float64 `json:"lon"`
+			ID     int     `json:"id"`
+			Type   string  `json:"type"`
+			Lat    float64 `json:"lat"`
+			Lon    float64 `json:"lon"`
+			Center *struct {
+				Lat float64 `json:"lat"`
+				Lon float64 `json:"lon"`
+			} `json:"center,omitempty"`
 			Tags struct {
 				Name     string `json:"name"`
 				Amenity  string `json:"amenity"`
@@ -158,11 +156,17 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 			continue
 		}
 
+		// Ways and relations carry a computed centre rather than lat/lon
+		elemLat, elemLon := element.Lat, element.Lon
+		if element.Type != "node" {
+			if element.Center == nil {
+				continue // no coordinates to report
+			}
+			elemLat, elemLon = element.Center.Lat, element.Center.Lon
+		}
+
 		// Calculate distance
-		distance := osm.HaversineDistance(
-			lat, lon,
-			element.Lat, element.Lon,
-		)
+		distance := osm.HaversineDistance(lat, lon, elemLat, elemLon)
 
 		// Determine place category
 		categories := []string{}
@@ -184,8 +188,8 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 			ID:   strconv.Itoa(element.ID),
 			Name: element.Tags.Name,
 			Location: Location{
-				Latitude:  element.Lat,
-				Longitude: element.Lon,
+				Latitude:  elemLat,
+				Longitude: elemLon,
 			},
 			Categories: categories,
 			Distance:   distance,
@@ -219,6 +223,30 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 	}
 
 	return mcp.NewToolResultText(string(resultBytes)), nil
+}
+
+// applyCategoryTags adds the tags returned by mapCategoryToOSMTags to a query
+// builder as a union: one statement per element type per tag key.
+//
+// The keys of an OSM tag map are alternatives, not requirements - "cafe" means
+// amenity=cafe OR shop=coffee. Adding every key to a single statement makes
+// Overpass AND them ([amenity~"..."][shop~"..."]), which matches only objects
+// carrying all the tag families at once and so returns nothing. Likewise the
+// values of one key must be OR-ed in a single filter rather than appended one
+// at a time.
+//
+// Keys are sorted so the generated query is deterministic.
+func applyCategoryTags(b *core.OverpassBuilder, osmTags map[string][]string) {
+	keys := make([]string, 0, len(osmTags))
+	for key := range osmTags {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		tag := core.Tag(key, osmTags[key]...)
+		b.WithNode(tag).WithWay(tag).WithRelation(tag)
+	}
 }
 
 // mapCategoryToOSMTags maps generic category names to OSM tag combinations
@@ -390,58 +418,15 @@ func HandleSearchCategory(ctx context.Context, rawInput mcp.CallToolRequest) (*m
 	// Map generic categories to OSM tags
 	osmTags := mapCategoryToOSMTags(category)
 
-	// Build Overpass query
-	var queryBuilder strings.Builder
-	queryBuilder.WriteString("[out:json];")
-	queryBuilder.WriteString("(")
-
-	// Include nodes, ways, and relations in the bounding box
-	queryBuilder.WriteString(fmt.Sprintf("node(%f,%f,%f,%f)", southLat, westLon, northLat, eastLon))
-
-	// Add tag filters for nodes
-	for key, values := range osmTags {
-		for _, value := range values {
-			if value == "*" {
-				// Special case: use any value for this key
-				queryBuilder.WriteString(fmt.Sprintf("[%s]", key))
-			} else {
-				queryBuilder.WriteString(fmt.Sprintf("[%s=%s]", key, value))
-			}
-		}
-	}
-	queryBuilder.WriteString(";")
-
-	// Add ways with the same tags
-	queryBuilder.WriteString(fmt.Sprintf("way(%f,%f,%f,%f)", southLat, westLon, northLat, eastLon))
-	for key, values := range osmTags {
-		for _, value := range values {
-			if value == "*" {
-				queryBuilder.WriteString(fmt.Sprintf("[%s]", key))
-			} else {
-				queryBuilder.WriteString(fmt.Sprintf("[%s=%s]", key, value))
-			}
-		}
-	}
-	queryBuilder.WriteString(";")
-
-	// Add relations with the same tags
-	queryBuilder.WriteString(fmt.Sprintf("relation(%f,%f,%f,%f)", southLat, westLon, northLat, eastLon))
-	for key, values := range osmTags {
-		for _, value := range values {
-			if value == "*" {
-				queryBuilder.WriteString(fmt.Sprintf("[%s]", key))
-			} else {
-				queryBuilder.WriteString(fmt.Sprintf("[%s=%s]", key, value))
-			}
-		}
-	}
-	queryBuilder.WriteString(";")
-
-	// Complete the query
-	queryBuilder.WriteString(");out center;")
+	// Build Overpass query using the fluent builder. The tags are applied as a
+	// union so alternative tag keys are OR-ed rather than AND-ed.
+	queryBuilder := core.NewOverpassBuilder().
+		WithTimeout(25).
+		WithBoundingBox(southLat, westLon, northLat, eastLon)
+	applyCategoryTags(queryBuilder, osmTags)
 
 	// Log the generated query
-	overpassQuery := queryBuilder.String()
+	overpassQuery := queryBuilder.Build()
 	logger.Info("generated Overpass query", "query", overpassQuery)
 
 	// Build request
