@@ -144,7 +144,10 @@ func encodeSigned(value int) []byte {
 	return buf
 }
 
+// polylineAlphabet maps a 6-bit chunk to its printable ASCII byte (chunk+63).
+const polylineAlphabet = "?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+
 // polylineChar converts a 6-bit polyline chunk to its printable ASCII byte.
 func polylineChar(chunk int) byte {
-	return byte(uint8(chunk&0x3f) + 63)
+	return polylineAlphabet[chunk&0x3f]
 }
