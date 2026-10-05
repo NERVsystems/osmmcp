@@ -169,32 +169,6 @@ func HandleGetRouteDirections(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 	}
 
-	// Build the route segments
-	segments := make([]Segment, 0)
-	if len(bestRoute.Legs) > 0 {
-		for _, step := range bestRoute.Legs[0].Steps {
-			// Generate a human-readable instruction
-			instruction := generateInstruction(
-				step.Maneuver.Type,
-				step.Maneuver.Modifier,
-				step.Name,
-			)
-
-			// Create segment
-			segment := Segment{
-				Distance:    step.Distance,
-				Duration:    step.Duration,
-				Instruction: instruction,
-				Location: Location{
-					Latitude:  step.Maneuver.Location[1],
-					Longitude: step.Maneuver.Location[0],
-				},
-			}
-
-			segments = append(segments, segment)
-		}
-	}
-
 	// Create minimal route response — omit segments (turn-by-turn directions)
 	// and coordinates. Each segment adds ~100 chars to conversation history,
 	// compounding on every subsequent API call. The LLM only needs distance,
