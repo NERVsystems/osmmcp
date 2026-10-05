@@ -77,12 +77,13 @@ func HandleFindNearbyPlaces(ctx context.Context, req mcp.CallToolRequest) (*mcp.
 		WithTimeout(25).
 		WithCenter(lat, lon, radius)
 
-	// Add tag filters if category specified
+	// Add tag filters if category specified.
+	// Pass all values for a key in ONE WithTag call so the builder emits an OR-regex
+	// ([amenity~"restaurant|cafe|..."]). Calling WithTag once per value instead emits
+	// [amenity=restaurant][amenity=cafe]... which AND-matches and always returns empty.
 	if len(osmTags) > 0 {
 		for key, values := range osmTags {
-			for _, value := range values {
-				queryBuilder.WithTag(key, value)
-			}
+			queryBuilder.WithTag(key, values...)
 		}
 	}
 
