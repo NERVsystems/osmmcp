@@ -132,12 +132,19 @@ func encodeSigned(value int) []byte {
 		s = ^s
 	}
 
-	// Encode the value
+	// Encode the value in 5-bit chunks. After zigzag encoding s is
+	// non-negative, and every emitted chunk is masked to 6 bits (<= 0x3f), so
+	// chunk+63 is always within 63..126 and fits in a byte.
 	var buf []byte
 	for s >= 0x20 {
-		buf = append(buf, byte((0x20|(s&0x1f))+63))
+		buf = append(buf, polylineChar((s&0x1f)|0x20))
 		s >>= 5
 	}
-	buf = append(buf, byte(s+63))
+	buf = append(buf, polylineChar(s&0x1f))
 	return buf
+}
+
+// polylineChar converts a 6-bit polyline chunk to its printable ASCII byte.
+func polylineChar(chunk int) byte {
+	return byte(uint8(chunk&0x3f) + 63)
 }

@@ -6,9 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -157,24 +155,6 @@ func HandleGetMapImage(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallT
 			},
 		},
 	}, nil
-}
-
-// fetchImageFromURL retrieves an image from a URL
-func fetchImageFromURL(ctx context.Context, url string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", "NERV-MCP-Client/1.0 (contact: ops@nerv.systems)")
-	req.Header.Set("Referer", "https://github.com/NERVsystems/osmmcp")
-
-	resp, err := core.DoWithRetry(ctx, req, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	return io.ReadAll(resp.Body)
 }
 
 // encodeToBase64 encodes binary data to base64 string

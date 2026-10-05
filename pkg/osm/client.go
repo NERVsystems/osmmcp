@@ -163,13 +163,48 @@ func DoRequest(ctx context.Context, req *http.Request) (*http.Response, error) {
 	// Set User-Agent header
 	req.Header.Set("User-Agent", GetUserAgent())
 
+	if err := validateOutboundRequest(req); err != nil {
+		return nil, err
+	}
+
 	// Wait for rate limit
 	if err := waitForRateLimit(ctx, req); err != nil {
 		return nil, err
 	}
 
 	// Perform request
+	// #nosec G704 -- destination host was checked against the OSM service allow-list by validateOutboundRequest above
 	return httpClient.Do(req)
+}
+
+// allowedOutboundHosts is the set of upstream hosts this package may contact.
+// It is derived from the fixed service base URLs so outbound requests can
+// never be steered to an arbitrary (e.g. internal) host.
+var (
+	allowedHostsMu       sync.RWMutex
+	allowedOutboundHosts = map[string]struct{}{
+		hostFromURL(NominatimBaseURL): {},
+		hostFromURL(OverpassBaseURL):  {},
+		hostFromURL(OSRMBaseURL):      {},
+	}
+)
+
+// validateOutboundRequest rejects requests whose scheme is not http(s) or whose
+// host is not one of the configured OSM service hosts (SSRF protection).
+func validateOutboundRequest(req *http.Request) error {
+	if req == nil || req.URL == nil {
+		return fmt.Errorf("outbound request has no URL")
+	}
+	if req.URL.Scheme != "https" && req.URL.Scheme != "http" {
+		return fmt.Errorf("outbound request scheme %q not allowed", req.URL.Scheme)
+	}
+	allowedHostsMu.RLock()
+	_, ok := allowedOutboundHosts[req.URL.Host]
+	allowedHostsMu.RUnlock()
+	if !ok {
+		return fmt.Errorf("outbound request host %q is not an allowed OSM service host", req.URL.Host)
+	}
+	return nil
 }
 
 // NewRequestWithUserAgent creates a new HTTP request with proper User-Agent header

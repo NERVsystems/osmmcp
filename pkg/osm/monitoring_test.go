@@ -121,6 +121,7 @@ func TestMonitoredDoRequestSuccess(t *testing.T) {
 		w.Write([]byte("OK"))
 	}))
 	defer server.Close()
+	allowHostForTest(t, server.URL)
 
 	// Set up monitoring hooks
 	var requestCalled, responseCalled bool
@@ -189,6 +190,7 @@ func TestMonitoredDoRequestError(t *testing.T) {
 		w.Write([]byte("Internal Server Error"))
 	}))
 	defer server.Close()
+	allowHostForTest(t, server.URL)
 
 	// Set up monitoring hooks
 	var errorCalled bool
@@ -245,6 +247,7 @@ func TestMonitoredDoRequestNetworkError(t *testing.T) {
 	defer SetMonitoringHooks(nil) // Clean up
 
 	// Make request to invalid URL (using a blocked port)
+	allowHostForTest(t, "http://127.0.0.1:1")
 	req, err := http.NewRequest("GET", "http://127.0.0.1:1", nil)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
@@ -275,6 +278,7 @@ func TestMonitoredDoRequestWithoutHooks(t *testing.T) {
 		w.Write([]byte("OK"))
 	}))
 	defer server.Close()
+	allowHostForTest(t, server.URL)
 
 	// Make request without hooks (should not panic)
 	req, err := http.NewRequest("GET", server.URL, nil)
@@ -300,6 +304,7 @@ func TestMonitoredDoRequestRateLimit(t *testing.T) {
 		w.Write([]byte("OK"))
 	}))
 	defer server.Close()
+	allowHostForTest(t, server.URL)
 
 	// Set up monitoring hooks
 	var rateLimitCalled bool
@@ -354,6 +359,7 @@ func BenchmarkMonitoredDoRequest(b *testing.B) {
 		w.Write([]byte("OK"))
 	}))
 	defer server.Close()
+	allowHostForTest(b, server.URL)
 
 	// Set up minimal monitoring hooks
 	hooks := &MonitoringHooks{
@@ -380,5 +386,33 @@ func BenchmarkGetServiceFromRequest(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		getServiceFromRequest(req)
+	}
+}
+
+func TestMonitoredDoRequestRejectsDisallowedHost(t *testing.T) {
+	var capturedErrorType string
+	SetMonitoringHooks(&MonitoringHooks{
+		OnError: func(service, errorType string) { capturedErrorType = errorType },
+	})
+	defer SetMonitoringHooks(nil)
+
+	for _, raw := range []string{
+		"http://169.254.169.254/latest/meta-data/",
+		"http://localhost:8080/",
+		"file:///etc/passwd",
+	} {
+		req, err := http.NewRequest("GET", raw, nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+		if _, err := MonitoredDoRequest(context.Background(), req, "test_operation"); err == nil {
+			t.Errorf("expected %s to be rejected", raw)
+		}
+		if _, err := DoRequest(context.Background(), req); err == nil {
+			t.Errorf("expected DoRequest(%s) to be rejected", raw)
+		}
+	}
+	if capturedErrorType != "disallowed_host" {
+		t.Errorf("Expected error type 'disallowed_host', got %s", capturedErrorType)
 	}
 }
