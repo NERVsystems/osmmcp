@@ -51,6 +51,13 @@ func MonitoredDoRequest(ctx context.Context, req *http.Request, operation string
 		hooks.OnRequest(service, operation)
 	}
 
+	if err := validateOutboundRequest(req); err != nil {
+		if hooks != nil && hooks.OnError != nil {
+			hooks.OnError(service, "disallowed_host")
+		}
+		return nil, err
+	}
+
 	start := time.Now()
 
 	// Check for rate limiting
@@ -71,6 +78,7 @@ func MonitoredDoRequest(ctx context.Context, req *http.Request, operation string
 
 	// Reset timer for actual request
 	requestStart := time.Now()
+	// #nosec G704 -- destination host was checked against the OSM service allow-list by validateOutboundRequest above
 	resp, err := httpClient.Do(req)
 	duration := time.Since(requestStart)
 

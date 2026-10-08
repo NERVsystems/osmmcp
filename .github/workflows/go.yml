@@ -53,6 +53,7 @@ jobs:
       run: go test -v -coverprofile=coverage.out ./...
 
     - name: Upload coverage to Codecov
+      continue-on-error: true  # third-party upload; must not fail CI
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.out

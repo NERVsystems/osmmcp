@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"regexp"
 	"sync"
 	"time"
 
@@ -126,8 +128,26 @@ func (t *HTTPTransport) setupRoutes() {
 func (t *HTTPTransport) httpsEnforcement(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if t.config.ForceHTTPS && r.TLS == nil {
-			// Redirect HTTP to HTTPS
-			httpsURL := "https://" + r.Host + r.RequestURI
+			// Redirect HTTP to HTTPS. The target host is taken from the
+			// configured BaseURL when set; otherwise the client-supplied Host
+			// header is strictly validated so it cannot be abused to inject
+			// an arbitrary redirect target (open redirect / Host header
+			// injection).
+			host, ok := t.redirectHost(r.Host)
+			if !ok {
+				t.logger.Warn("rejecting HTTP request with invalid Host header",
+					"client_ip", r.RemoteAddr)
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			target := url.URL{
+				Scheme:   "https",
+				Host:     host,
+				Path:     r.URL.Path,
+				RawQuery: r.URL.RawQuery,
+			}
+			httpsURL := target.String()
 
 			// Log the redirect for security audit
 			t.logger.Info("redirecting HTTP request to HTTPS",
@@ -141,6 +161,25 @@ func (t *HTTPTransport) httpsEnforcement(next http.HandlerFunc) http.HandlerFunc
 
 		next(w, r)
 	}
+}
+
+// validHostHeader matches a DNS hostname or IPv4 address with an optional
+// port, or a bracketed IPv6 literal with an optional port.
+var validHostHeader = regexp.MustCompile(`^(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*|\[[0-9A-Fa-f:.]+\])(?::[0-9]{1,5})?$`)
+
+// redirectHost returns the host to use for an HTTP->HTTPS redirect.
+// A configured BaseURL always wins; otherwise the request Host header is used
+// only if it is a syntactically valid hostname[:port].
+func (t *HTTPTransport) redirectHost(requestHost string) (string, bool) {
+	if t.config.BaseURL != "" {
+		if u, err := url.Parse(t.config.BaseURL); err == nil && u.Host != "" {
+			return u.Host, true
+		}
+	}
+	if len(requestHost) == 0 || len(requestHost) > 260 || !validHostHeader.MatchString(requestHost) {
+		return "", false
+	}
+	return requestHost, true
 }
 
 // authMiddleware provides authentication for MCP endpoints

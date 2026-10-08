@@ -52,6 +52,10 @@ func secureHeaders(req *http.Request) {
 
 // WithRetry performs an HTTP request with exponential backoff retry logic
 func WithRetry(ctx context.Context, req *http.Request, client *http.Client, options RetryOptions) (*http.Response, error) {
+	if err := validateOutboundURL(req); err != nil {
+		return nil, err
+	}
+
 	// Start tracing span
 	spanName := fmt.Sprintf("http.request %s %s", req.Method, req.URL.Host)
 	ctx, span := tracing.StartSpan(ctx, spanName,
@@ -120,7 +124,8 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 		// Add security headers
 		secureHeaders(newReq)
 
-		// Execute the request
+		// Execute the request.
+		// #nosec G704 -- callers build the URL from fixed, code-configured service base URLs (OSRM, tile provider); user input only reaches path/query, and validateOutboundURL enforces an http(s) scheme with a host
 		resp, err := client.Do(newReq)
 		if err == nil && resp.StatusCode == http.StatusOK {
 			// Success - set span attributes
@@ -175,6 +180,19 @@ func WithRetry(ctx context.Context, req *http.Request, client *http.Client, opti
 	}
 	return nil, NewError(ErrNetworkError, "max retries reached").
 		WithGuidance("The request failed after multiple attempts. Please try again later")
+}
+
+// validateOutboundURL ensures an outbound request targets an absolute http(s)
+// URL with a host. It guards against non-HTTP schemes and relative/hostless
+// URLs reaching the HTTP client.
+func validateOutboundURL(req *http.Request) error {
+	if req == nil || req.URL == nil {
+		return NewError(ErrInternalError, "outbound request has no URL")
+	}
+	if (req.URL.Scheme != "https" && req.URL.Scheme != "http") || req.URL.Host == "" {
+		return NewError(ErrInternalError, fmt.Sprintf("outbound request URL scheme %q / host %q not allowed", req.URL.Scheme, req.URL.Host))
+	}
+	return nil
 }
 
 // DoWithRetry performs an HTTP request with default retry options

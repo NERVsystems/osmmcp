@@ -478,7 +478,8 @@ func uniformSample(coords [][]float64, maxPoints int) [][]float64 {
 // the full route geometry without the LLM having to relay coordinates.
 func writeRouteFile(coords [][]float64) (string, error) {
 	dir := "/tmp/routes"
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// Owner+group only; the route files themselves are created 0600 by CreateTemp.
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("creating route dir: %w", err)
 	}
 
@@ -486,14 +487,24 @@ func writeRouteFile(coords [][]float64) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("creating temp file: %w", err)
 	}
-	defer f.Close()
+	name := f.Name()
 
 	if err := json.NewEncoder(f).Encode(coords); err != nil {
-		os.Remove(f.Name())
+		_ = f.Close()
+		if rmErr := os.Remove(name); rmErr != nil {
+			return "", fmt.Errorf("encoding coordinates: %w (cleanup failed: %v)", err, rmErr)
+		}
 		return "", fmt.Errorf("encoding coordinates: %w", err)
 	}
 
-	return filepath.Clean(f.Name()), nil
+	// Close explicitly so a failed flush is reported instead of handing back
+	// a path to a truncated file.
+	if err := f.Close(); err != nil {
+		_ = os.Remove(name)
+		return "", fmt.Errorf("closing route file: %w", err)
+	}
+
+	return filepath.Clean(name), nil
 }
 
 // generateInstruction creates a human-readable instruction from OSRM maneuver
